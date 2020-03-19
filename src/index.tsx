@@ -105,6 +105,11 @@ const getCommonStyle = (id: string, numItems: number, itemSize: number): string 
     width: 100%;
     height: ${itemSize}px;
   }
+
+  #${id} > div > div > * {
+    height: ${itemSize}px;
+    box-sizing: border-box;
+  }
 `;
 
 export default Window;
