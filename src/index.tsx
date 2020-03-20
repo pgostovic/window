@@ -59,8 +59,8 @@ const Window: FC<Props> = ({ windowRef, items, children, style, className, itemS
         const newOffset = Math.max(-maxOffest, Math.min(0, -index * itemSize));
         offsetRef.current = newOffset;
         if (itemsRef.current) {
-          itemsRef.current.style.top = `${newOffset}px`;
           const first = Math.abs(Math.floor(newOffset / itemSize));
+          itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
           if (first !== firstVisible) {
             setFirstVisible(first);
           }
@@ -86,8 +86,8 @@ const Window: FC<Props> = ({ windowRef, items, children, style, className, itemS
       offsetRef.current = newOffset;
       requestAnimationFrame(() => {
         if (itemsRef.current) {
-          itemsRef.current.style.top = `${newOffset}px`;
           const first = Math.abs(Math.floor(newOffset / itemSize));
+          itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
           if (first !== firstVisible) {
             setFirstVisible(first);
           }
@@ -99,7 +99,7 @@ const Window: FC<Props> = ({ windowRef, items, children, style, className, itemS
 
   return (
     <>
-      <style>{getCommonStyle(idRef.current, items.length, itemSize)}</style>
+      <style>{getCommonStyle(idRef.current, numVisible, itemSize)}</style>
       <div
         ref={rootRef}
         id={idRef.current}
@@ -109,7 +109,7 @@ const Window: FC<Props> = ({ windowRef, items, children, style, className, itemS
       >
         <div ref={itemsRef}>
           {items.slice(firstVisible, firstVisible + numVisible).map((item, i) => (
-            <div key={i + firstVisible} style={{ top: (i + firstVisible) * itemSize }}>
+            <div key={i + firstVisible} style={{ top: i * itemSize }}>
               {children(item)}
             </div>
           ))}
@@ -139,6 +139,7 @@ const getCommonStyle = (id: string, numItems: number, itemSize: number): string 
     left: 0;
     width: 100%;
     height: ${itemSize}px;
+    will-change: top;
   }
 
   #${id} > div > div > * {
