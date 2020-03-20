@@ -2,6 +2,7 @@ import React, {
   createRef,
   CSSProperties,
   FC,
+  forwardRef,
   MutableRefObject,
   ReactNode,
   useCallback,
@@ -15,7 +16,7 @@ import React, {
 const SCROLL_SPEED = 1;
 
 interface Props {
-  windowRef?: MutableRefObject<WindowRef | undefined>;
+  ref?: MutableRefObject<WindowRef>;
   items: unknown[];
   children(datum: unknown): ReactNode;
   style?: CSSProperties;
@@ -36,88 +37,90 @@ const idIter = (function* nameGen(): IterableIterator<string> {
   }
 })();
 
-const Window: FC<Props> = ({ windowRef, items, children, style, className, itemSize = 40 }) => {
-  const idRef = useRef(idIter.next().value);
-  const offsetRef = useRef(0);
-  const rootRef = createRef<HTMLDivElement>();
-  const itemsRef = createRef<HTMLDivElement>();
-  const [height, setHeight] = useState(0);
-  const [firstVisible, setFirstVisible] = useState(0);
+const Window: FC<Props> = forwardRef(
+  ({ items, children, style, className, itemSize = 40 }, ref) => {
+    const idRef = useRef(idIter.next().value);
+    const offsetRef = useRef(0);
+    const rootRef = createRef<HTMLDivElement>();
+    const itemsRef = createRef<HTMLDivElement>();
+    const [height, setHeight] = useState(0);
+    const [firstVisible, setFirstVisible] = useState(0);
 
-  const maxOffest = useMemo(() => items.length * itemSize - height, [
-    itemSize,
-    height,
-    items.length,
-  ]);
+    const maxOffest = useMemo(() => items.length * itemSize - height, [
+      itemSize,
+      height,
+      items.length,
+    ]);
 
-  if (windowRef) {
-    windowRef.current = {
-      scrollToItem(item: undefined) {
-        this.scrollToIndex(items.indexOf(item));
-      },
-      scrollToIndex(index: number) {
-        const newOffset = Math.max(-maxOffest, Math.min(0, -index * itemSize));
-        offsetRef.current = newOffset;
-        if (itemsRef.current) {
-          const first = Math.abs(Math.floor(newOffset / itemSize));
-          itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
-          if (first !== firstVisible) {
-            setFirstVisible(first);
+    if (ref) {
+      (ref as MutableRefObject<WindowRef>).current = {
+        scrollToItem(item: undefined) {
+          this.scrollToIndex(items.indexOf(item));
+        },
+        scrollToIndex(index: number) {
+          const newOffset = Math.max(-maxOffest, Math.min(0, -index * itemSize));
+          offsetRef.current = newOffset;
+          if (itemsRef.current) {
+            const first = Math.abs(Math.floor(newOffset / itemSize));
+            itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
+            if (first !== firstVisible) {
+              setFirstVisible(first);
+            }
           }
-        }
-      },
-    };
-  }
-
-  useLayoutEffect(() => {
-    if (rootRef.current) {
-      setHeight(rootRef.current.getBoundingClientRect().height);
+        },
+      };
     }
-  }, []);
 
-  const numVisible = Math.ceil(height / itemSize);
+    useLayoutEffect(() => {
+      if (rootRef.current) {
+        setHeight(rootRef.current.getBoundingClientRect().height);
+      }
+    }, []);
 
-  const onWheel = useCallback(
-    (event: WheelEvent) => {
-      const newOffset = Math.max(
-        -maxOffest,
-        Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
-      );
-      offsetRef.current = newOffset;
-      requestAnimationFrame(() => {
-        if (itemsRef.current) {
-          const first = Math.abs(Math.floor(newOffset / itemSize));
-          itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
-          if (first !== firstVisible) {
-            setFirstVisible(first);
+    const numVisible = Math.ceil(height / itemSize);
+
+    const onWheel = useCallback(
+      (event: WheelEvent) => {
+        const newOffset = Math.max(
+          -maxOffest,
+          Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
+        );
+        offsetRef.current = newOffset;
+        requestAnimationFrame(() => {
+          if (itemsRef.current) {
+            const first = Math.abs(Math.floor(newOffset / itemSize));
+            itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
+            if (first !== firstVisible) {
+              setFirstVisible(first);
+            }
           }
-        }
-      });
-    },
-    [height, firstVisible, itemsRef],
-  );
+        });
+      },
+      [height, firstVisible, itemsRef],
+    );
 
-  return (
-    <>
-      <style>{getCommonStyle(idRef.current, numVisible, itemSize)}</style>
-      <div
-        ref={rootRef}
-        id={idRef.current}
-        style={getRootStyle(style)}
-        className={className}
-        onWheel={onWheel}
-      >
-        <div ref={itemsRef}>
-          {items.slice(firstVisible, firstVisible + numVisible).map((item, i) => (
-            <div key={i + firstVisible} style={{ top: i * itemSize }}>
-              {children(item)}
-            </div>
-          ))}
+    return (
+      <>
+        <style>{getCommonStyle(idRef.current, numVisible, itemSize)}</style>
+        <div
+          ref={rootRef}
+          id={idRef.current}
+          style={getRootStyle(style)}
+          className={className}
+          onWheel={onWheel}
+        >
+          <div ref={itemsRef}>
+            {items.slice(firstVisible, firstVisible + numVisible).map((item, i) => (
+              <div key={i + firstVisible} style={{ top: i * itemSize }}>
+                {children(item)}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-    </>
-  );
-};
+      </>
+    );
+  },
+);
 
 const getRootStyle = (style?: CSSProperties): CSSProperties => ({
   ...style,
