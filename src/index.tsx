@@ -5,12 +5,11 @@ import React, {
   forwardRef,
   MutableRefObject,
   ReactNode,
-  useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  WheelEvent,
 } from 'react';
 
 const SCROLL_SPEED = 1;
@@ -79,36 +78,41 @@ const Window: FC<Props> = forwardRef(
 
     const numVisible = Math.ceil(height / itemSize);
 
-    const onWheel = useCallback(
-      (event: WheelEvent) => {
+    useEffect(() => {
+      const rootElmnt = rootRef.current;
+      const itemsElmnt = itemsRef.current;
+
+      const onWheel = (event: globalThis.WheelEvent) => {
         const newOffset = Math.max(
           -maxOffest,
           Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
         );
         offsetRef.current = newOffset;
         requestAnimationFrame(() => {
-          if (itemsRef.current) {
+          if (itemsElmnt) {
             const first = Math.abs(Math.floor(newOffset / itemSize));
-            itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
+            itemsElmnt.style.top = `${newOffset + itemSize * first}px`;
             if (first !== firstVisible) {
               setFirstVisible(first);
             }
           }
         });
-      },
-      [height, firstVisible, itemsRef],
-    );
+      };
+
+      if (rootElmnt) {
+        rootElmnt.addEventListener('wheel', onWheel, { passive: true });
+      }
+      return () => {
+        if (rootElmnt) {
+          rootElmnt.removeEventListener('wheel', onWheel);
+        }
+      };
+    }, [rootRef.current, itemsRef.current]);
 
     return (
       <>
         <style>{getCommonStyle(idRef.current, numVisible, itemSize)}</style>
-        <div
-          ref={rootRef}
-          id={idRef.current}
-          style={getRootStyle(style)}
-          className={className}
-          onWheel={onWheel}
-        >
+        <div ref={rootRef} id={idRef.current} style={getRootStyle(style)} className={className}>
           <div ref={itemsRef}>
             {items.slice(firstVisible, firstVisible + numVisible).map((item, i) => (
               <div key={i + firstVisible} style={{ top: i * itemSize }}>
