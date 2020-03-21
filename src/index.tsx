@@ -5,6 +5,7 @@ import React, {
   forwardRef,
   MutableRefObject,
   ReactNode,
+  RefObject,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -17,10 +18,11 @@ const SCROLL_SPEED = 1;
 interface Props {
   ref?: MutableRefObject<WindowRef>;
   items: unknown[];
-  children(datum: unknown): ReactNode;
+  itemSize?: number;
+  eventSourceRef?: RefObject<HTMLElement>;
   style?: CSSProperties;
   className?: string;
-  itemSize?: number;
+  children(datum: unknown): ReactNode;
 }
 
 export interface WindowRef {
@@ -37,7 +39,7 @@ const idIter = (function* nameGen(): IterableIterator<string> {
 })();
 
 const Window: FC<Props> = forwardRef(
-  ({ items, children, style, className, itemSize = 40 }, ref) => {
+  ({ items, itemSize = 40, eventSourceRef, style, className, children }, ref) => {
     const idRef = useRef(idIter.next().value);
     const offsetRef = useRef(0);
     const rootRef = createRef<HTMLDivElement>();
@@ -79,7 +81,7 @@ const Window: FC<Props> = forwardRef(
     const numVisible = Math.ceil(height / itemSize);
 
     useEffect(() => {
-      const rootElmnt = rootRef.current;
+      const eventSource = eventSourceRef?.current || rootRef.current;
       const itemsElmnt = itemsRef.current;
 
       const onWheel = (event: globalThis.WheelEvent) => {
@@ -88,26 +90,26 @@ const Window: FC<Props> = forwardRef(
           Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
         );
         offsetRef.current = newOffset;
+        const first = Math.abs(Math.floor(newOffset / itemSize));
         requestAnimationFrame(() => {
           if (itemsElmnt) {
-            const first = Math.abs(Math.floor(newOffset / itemSize));
             itemsElmnt.style.top = `${newOffset + itemSize * first}px`;
-            if (first !== firstVisible) {
-              setFirstVisible(first);
-            }
           }
         });
-      };
-
-      if (rootElmnt) {
-        rootElmnt.addEventListener('wheel', onWheel, { passive: true });
-      }
-      return () => {
-        if (rootElmnt) {
-          rootElmnt.removeEventListener('wheel', onWheel);
+        if (first !== firstVisible) {
+          setFirstVisible(first);
         }
       };
-    }, [rootRef.current, itemsRef.current]);
+
+      if (eventSource) {
+        eventSource.addEventListener('wheel', onWheel, { passive: true });
+      }
+      return () => {
+        if (eventSource) {
+          eventSource.removeEventListener('wheel', onWheel);
+        }
+      };
+    }, [eventSourceRef?.current, rootRef.current, itemsRef.current, firstVisible]);
 
     return (
       <>
@@ -132,12 +134,12 @@ const getRootStyle = (style?: CSSProperties): CSSProperties => ({
   overflow: 'hidden',
 });
 
-const getCommonStyle = (id: string, numItems: number, itemSize: number): string => `
+const getCommonStyle = (id: string, numVisible: number, itemSize: number): string => `
   #${id} > div {
     position: absolute;
     left: 0;
     width: 100%;
-    height: ${numItems * itemSize}px;
+    height: ${numVisible * itemSize}px;
     will-change: top;
   }
 
