@@ -19,6 +19,7 @@ interface Props {
   ref?: MutableRefObject<WindowRef>;
   items: unknown[];
   itemSize?: number;
+  eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   style?: CSSProperties;
   className?: string;
@@ -39,7 +40,7 @@ const idIter = (function* nameGen(): IterableIterator<string> {
 })();
 
 const Window: FC<Props> = forwardRef(
-  ({ items, itemSize = 40, eventSourceRef, style, className, children }, ref) => {
+  ({ items, itemSize = 40, eventSource, eventSourceRef, style, className, children }, ref) => {
     const idRef = useRef(idIter.next().value);
     const offsetRef = useRef(0);
     const rootRef = createRef<HTMLDivElement>();
@@ -81,10 +82,12 @@ const Window: FC<Props> = forwardRef(
     const numVisible = Math.ceil(height / itemSize);
 
     useEffect(() => {
-      const eventSource = eventSourceRef?.current || rootRef.current;
+      const source = (eventSource || eventSourceRef?.current || rootRef.current) as
+        | HTMLElement
+        | undefined;
       const itemsElmnt = itemsRef.current;
 
-      const onWheel = (event: globalThis.WheelEvent) => {
+      const onWheel = (event: WheelEvent) => {
         const newOffset = Math.max(
           -maxOffest,
           Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
@@ -101,15 +104,15 @@ const Window: FC<Props> = forwardRef(
         }
       };
 
-      if (eventSource) {
-        eventSource.addEventListener('wheel', onWheel, { passive: true });
+      if (source) {
+        source.addEventListener('wheel', onWheel, { passive: true });
       }
       return () => {
-        if (eventSource) {
-          eventSource.removeEventListener('wheel', onWheel);
+        if (source) {
+          source.removeEventListener('wheel', onWheel);
         }
       };
-    }, [eventSourceRef?.current, rootRef.current, itemsRef.current, firstVisible]);
+    }, [eventSource, eventSourceRef?.current, rootRef.current, itemsRef.current, firstVisible]);
 
     return (
       <>
