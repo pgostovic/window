@@ -18,12 +18,12 @@ const SCROLL_SPEED = 1;
 interface Props {
   ref?: MutableRefObject<WindowRef>;
   items: unknown[];
-  itemSize?: number;
+  itemSize?: number | ((index: number) => number);
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   style?: CSSProperties;
   className?: string;
-  children(datum: unknown): ReactNode;
+  children(datum: unknown, index: number): ReactNode;
 }
 
 export interface WindowRef {
@@ -48,11 +48,25 @@ const Window: FC<Props> = forwardRef(
     const [height, setHeight] = useState(0);
     const [firstVisible, setFirstVisible] = useState(0);
 
-    const maxOffest = useMemo(() => items.length * itemSize - height, [
-      itemSize,
-      height,
-      items.length,
-    ]);
+    const itemSizes: number[] = useMemo(() => {
+      if (typeof itemSize === 'number') {
+        return new Array(items.length).fill(itemSize);
+      } else {
+        return items.map((_, i) => itemSize(i));
+      }
+    }, [items, itemSize]);
+
+    const itemOffsets = useMemo(() => {
+      const offsets = [0];
+      for (let i = 0; i < itemSizes.length - 1; i++) {
+        offsets.push(offsets[i] + itemSizes[i]);
+      }
+      return offsets;
+    }, [itemSizes]);
+
+    const lastIndex = itemOffsets.length - 1;
+    const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
+    const maxOffset = totalSize - height;
 
     if (ref) {
       (ref as MutableRefObject<WindowRef>).current = {
@@ -60,11 +74,12 @@ const Window: FC<Props> = forwardRef(
           this.scrollToIndex(items.indexOf(item));
         },
         scrollToIndex(index: number) {
-          const newOffset = Math.max(-maxOffest, Math.min(0, -index * itemSize));
+          const newOffset = Math.max(-maxOffset, Math.min(0, -itemOffsets[index]));
           offsetRef.current = newOffset;
           if (itemsRef.current) {
-            const first = Math.abs(Math.floor(newOffset / itemSize));
-            itemsRef.current.style.top = `${newOffset + itemSize * first}px`;
+            // TODO -- Scrolling to the last item will put it at the top with empty space below.
+            const first = index;
+            itemsRef.current.style.top = '0px';
             if (first !== firstVisible) {
               setFirstVisible(first);
             }
@@ -79,24 +94,38 @@ const Window: FC<Props> = forwardRef(
       }
     }, []);
 
-    const numVisible = Math.ceil(height / itemSize);
+    let numVisible = 0;
+    let heightLeft = height;
+    for (let i = firstVisible; i < items.length && heightLeft > 0; i++) {
+      heightLeft -= itemSizes[i];
+      numVisible++;
+    }
 
     useEffect(() => {
       const source = (eventSource || eventSourceRef?.current || rootRef.current) as
         | HTMLElement
         | undefined;
+
       const itemsElmnt = itemsRef.current;
 
       const onWheel = (event: WheelEvent) => {
+        // Don't allow scrolling if items don't fill the scroll window.
+        if (totalSize < height) {
+          return;
+        }
         const newOffset = Math.max(
-          -maxOffest,
+          -maxOffset,
           Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
         );
         offsetRef.current = newOffset;
-        const first = Math.abs(Math.floor(newOffset / itemSize));
+        const first = Math.max(
+          0,
+          itemOffsets.findIndex(itemOffset => itemOffset >= -newOffset) - 1,
+        );
+
         requestAnimationFrame(() => {
           if (itemsElmnt) {
-            itemsElmnt.style.top = `${newOffset + itemSize * first}px`;
+            itemsElmnt.style.top = `${newOffset + (itemOffsets[first] || 0)}px`;
           }
         });
         if (first !== firstVisible) {
@@ -112,16 +141,32 @@ const Window: FC<Props> = forwardRef(
           source.removeEventListener('wheel', onWheel);
         }
       };
-    }, [eventSource, eventSourceRef?.current, rootRef.current, itemsRef.current, firstVisible]);
+    }, [
+      eventSource,
+      eventSourceRef?.current,
+      rootRef.current,
+      itemsRef.current,
+      firstVisible,
+      totalSize,
+      height,
+    ]);
+
+    const firstVisibleOffset = itemOffsets[firstVisible];
 
     return (
       <>
-        <style>{getCommonStyle(idRef.current, numVisible, itemSize)}</style>
+        <style>{getCommonStyle(idRef.current)}</style>
         <div ref={rootRef} id={idRef.current} style={getRootStyle(style)} className={className}>
           <div ref={itemsRef}>
             {items.slice(firstVisible, firstVisible + numVisible).map((item, i) => (
-              <div key={i + firstVisible} style={{ top: i * itemSize }}>
-                {children(item)}
+              <div
+                key={i + firstVisible}
+                style={{
+                  top: itemOffsets[i + firstVisible] - firstVisibleOffset,
+                  height: itemSizes[i + firstVisible],
+                }}
+              >
+                {children(item, i + firstVisible)}
               </div>
             ))}
           </div>
@@ -137,12 +182,11 @@ const getRootStyle = (style?: CSSProperties): CSSProperties => ({
   overflow: 'hidden',
 });
 
-const getCommonStyle = (id: string, numVisible: number, itemSize: number): string => `
+const getCommonStyle = (id: string): string => `
   #${id} > div {
     position: absolute;
     left: 0;
     width: 100%;
-    height: ${numVisible * itemSize}px;
     will-change: top;
   }
 
@@ -150,12 +194,11 @@ const getCommonStyle = (id: string, numVisible: number, itemSize: number): strin
     position: absolute;
     left: 0;
     width: 100%;
-    height: ${itemSize}px;
     will-change: top;
   }
 
   #${id} > div > div > * {
-    height: ${itemSize}px;
+    height: 100%;
     box-sizing: border-box;
   }
 `;
