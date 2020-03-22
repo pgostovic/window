@@ -14,7 +14,7 @@ export const ScrollSpeed: FC = () => {
       Scroll Speed:
       {[0.1, 1, 10].map(s => (
         <span key={s} style={{ marginLeft: '20px' }}>
-          <input type="radio" name="speed" checked={speed === s} onClick={() => setSpeed(s)} />
+          <input type="radio" name="speed" checked={speed === s} onChange={() => setSpeed(s)} />
           <span style={{ marginLeft: '5px' }}>{s}</span>
         </span>
       ))}
