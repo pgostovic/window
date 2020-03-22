@@ -17,7 +17,7 @@ const DEFAULT_SCROLL_SPEED = 1;
 const DEFAULT_ITEM_SIZE = 40;
 
 interface Props {
-  ref?: MutableRefObject<WindowRef>;
+  ref?: MutableRefObject<ScrollerRef>;
   items: unknown[];
   itemSize?: number | ((index: number) => number);
   scrollSpeed?: number;
@@ -28,7 +28,7 @@ interface Props {
   children(datum: unknown, index: number): ReactNode;
 }
 
-export interface WindowRef {
+export interface ScrollerRef {
   scrollToItem(item: unknown): void;
   scrollToIndex(index: number): void;
 }
@@ -41,7 +41,7 @@ const idIter = (function* nameGen(): IterableIterator<string> {
   }
 })();
 
-export const Window: FC<Props> = forwardRef(
+export const Scroller: FC<Props> = forwardRef(
   (
     {
       items,
@@ -83,7 +83,7 @@ export const Window: FC<Props> = forwardRef(
     const maxOffset = totalSize - height;
 
     if (ref) {
-      (ref as MutableRefObject<WindowRef>).current = {
+      (ref as MutableRefObject<ScrollerRef>).current = {
         scrollToItem(item: undefined) {
           this.scrollToIndex(items.indexOf(item));
         },

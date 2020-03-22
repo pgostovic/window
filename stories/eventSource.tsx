@@ -1,6 +1,6 @@
 import React, { createRef, FC } from 'react';
 
-import { Window } from '../src';
+import { Scroller } from '../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {
@@ -10,13 +10,13 @@ for (let i = 0; i < 1000; i++) {
 export const EventSource: FC = () => (
   <>
     Scroll with the cursor anywhere in the frame.
-    <Window eventSource={window} style={{ height: '500px', width: '200px' }} items={numbers}>
+    <Scroller eventSource={window} style={{ height: '500px', width: '200px' }} items={numbers}>
       {(num: number) => (
         <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
           {num}
         </div>
       )}
-    </Window>
+    </Scroller>
   </>
 );
 
@@ -25,13 +25,17 @@ export const EventSourceRef: FC = () => {
   return (
     <div ref={rootRef} style={{ height: '700px', width: '400px', backgroundColor: '#eee' }}>
       Scroll with the cursor anywhere in the shaded region.
-      <Window eventSourceRef={rootRef} style={{ height: '500px', width: '200px' }} items={numbers}>
+      <Scroller
+        eventSourceRef={rootRef}
+        style={{ height: '500px', width: '200px' }}
+        items={numbers}
+      >
         {(num: number) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             {num}
           </div>
         )}
-      </Window>
+      </Scroller>
     </div>
   );
 };

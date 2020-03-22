@@ -1,6 +1,6 @@
 import React, { FC, useState } from 'react';
 
-import { Window } from '../src';
+import { Scroller } from '../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {
@@ -18,7 +18,7 @@ export const ScrollSpeed: FC = () => {
           <span style={{ marginLeft: '5px' }}>{s}</span>
         </span>
       ))}
-      <Window
+      <Scroller
         style={{ height: '500px', width: '200px', marginTop: '10px' }}
         items={numbers}
         scrollSpeed={speed}
@@ -28,7 +28,7 @@ export const ScrollSpeed: FC = () => {
             {num}
           </div>
         )}
-      </Window>
+      </Scroller>
     </>
   );
 };

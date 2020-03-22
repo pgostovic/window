@@ -1,6 +1,6 @@
 import React, { FC } from 'react';
 
-import { Window } from '../src';
+import { Scroller } from '../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {
@@ -13,7 +13,7 @@ for (let i = 0; i < 1000; i++) {
 }
 
 export const ItemSizes: FC = () => (
-  <Window
+  <Scroller
     style={{ height: '500px', width: '200px' }}
     items={numbers}
     itemSize={index => sizes[index]}
@@ -24,5 +24,5 @@ export const ItemSizes: FC = () => (
         <span style={{ fontSize: 'small', color: '#999' }}>{sizes[i]}px</span>
       </div>
     )}
-  </Window>
+  </Scroller>
 );

@@ -1,7 +1,7 @@
 import faker from 'faker';
 import React, { FC, useRef, useState } from 'react';
 
-import { Window, WindowRef } from '../src';
+import { Scroller, ScrollerRef } from '../src';
 
 interface Person {
   firstName: string;
@@ -19,25 +19,25 @@ for (let i = 0; i < 1000; i++) {
 }
 
 export const ScrollToIndex: FC = () => {
-  const windowRef = useRef<WindowRef>();
+  const windowRef = useRef<ScrollerRef>();
 
   return (
     <div>
       <button onClick={() => windowRef.current.scrollToIndex(0)}>Scroll to index 0</button>
       <button onClick={() => windowRef.current.scrollToIndex(100)}>Scroll to index 100</button>
-      <Window ref={windowRef} style={{ height: '500px', width: '200px' }} items={people}>
+      <Scroller ref={windowRef} style={{ height: '500px', width: '200px' }} items={people}>
         {(person: Person, i) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             {i} - {person.firstName} {person.lastName}
           </div>
         )}
-      </Window>
+      </Scroller>
     </div>
   );
 };
 
 export const ScrollToItem: FC = () => {
-  const windowRef = useRef<WindowRef>();
+  const windowRef = useRef<ScrollerRef>();
   const [mark, setMark] = useState<Person>();
 
   return (
@@ -45,7 +45,7 @@ export const ScrollToItem: FC = () => {
       <button disabled={!mark} onClick={() => windowRef.current.scrollToItem(mark)}>
         Scroll to {mark ? mark.firstName : 'N/A'}
       </button>
-      <Window ref={windowRef} style={{ height: '500px' }} items={people}>
+      <Scroller ref={windowRef} style={{ height: '500px' }} items={people}>
         {(person: Person) => (
           <div
             style={{
@@ -62,7 +62,7 @@ export const ScrollToItem: FC = () => {
             <a href={`mailto:${person.email}`}>{person.email}</a>
           </div>
         )}
-      </Window>
+      </Scroller>
     </div>
   );
 };
