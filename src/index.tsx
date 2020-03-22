@@ -41,7 +41,7 @@ const idIter = (function* nameGen(): IterableIterator<string> {
   }
 })();
 
-const Window: FC<Props> = forwardRef(
+export const Window: FC<Props> = forwardRef(
   (
     {
       items,
@@ -217,5 +217,3 @@ const getCommonStyle = (id: string): string => `
     box-sizing: border-box;
   }
 `;
-
-export default Window;

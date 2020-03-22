@@ -1,6 +1,6 @@
 import React, { FC, useState } from 'react';
 
-import Window from '../src';
+import { Window } from '../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {

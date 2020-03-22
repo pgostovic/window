@@ -1,7 +1,7 @@
 import faker from 'faker';
 import React, { FC, useRef, useState } from 'react';
 
-import Window, { WindowRef } from '../src';
+import { Window, WindowRef } from '../src';
 
 interface Person {
   firstName: string;
