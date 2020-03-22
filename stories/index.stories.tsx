@@ -5,3 +5,4 @@ export * from './itemSizes';
 export * from './scrollSpeed';
 export * from './scrollTo';
 export * from './eventSource';
+export * from './styling';
