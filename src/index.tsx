@@ -13,12 +13,14 @@ import React, {
   useState,
 } from 'react';
 
-const SCROLL_SPEED = 1;
+const DEFAULT_SCROLL_SPEED = 1;
+const DEFAULT_ITEM_SIZE = 40;
 
 interface Props {
   ref?: MutableRefObject<WindowRef>;
   items: unknown[];
   itemSize?: number | ((index: number) => number);
+  scrollSpeed?: number;
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   style?: CSSProperties;
@@ -40,7 +42,19 @@ const idIter = (function* nameGen(): IterableIterator<string> {
 })();
 
 const Window: FC<Props> = forwardRef(
-  ({ items, itemSize = 40, eventSource, eventSourceRef, style, className, children }, ref) => {
+  (
+    {
+      items,
+      itemSize = DEFAULT_ITEM_SIZE,
+      scrollSpeed = DEFAULT_SCROLL_SPEED,
+      eventSource,
+      eventSourceRef,
+      style,
+      className,
+      children,
+    },
+    ref,
+  ) => {
     const idRef = useRef(idIter.next().value);
     const offsetRef = useRef(0);
     const rootRef = createRef<HTMLDivElement>();
@@ -115,7 +129,7 @@ const Window: FC<Props> = forwardRef(
         }
         const newOffset = Math.max(
           -maxOffset,
-          Math.min(0, offsetRef.current - event.deltaY * SCROLL_SPEED),
+          Math.min(0, offsetRef.current - event.deltaY * scrollSpeed),
         );
         offsetRef.current = newOffset;
         const first = Math.max(
@@ -149,6 +163,7 @@ const Window: FC<Props> = forwardRef(
       firstVisible,
       totalSize,
       height,
+      scrollSpeed,
     ]);
 
     const firstVisibleOffset = itemOffsets[firstVisible];
