@@ -82,8 +82,10 @@ export const Scroller: FC<Props> = forwardRef(
     const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
     const maxOffset = totalSize - height;
 
-    if (ref) {
-      (ref as MutableRefObject<ScrollerRef>).current = {
+    const r = ref;
+
+    if (r) {
+      (r as MutableRefObject<ScrollerRef>).current = {
         scrollToItem(item: undefined) {
           this.scrollToIndex(items.indexOf(item));
         },
@@ -93,7 +95,7 @@ export const Scroller: FC<Props> = forwardRef(
           if (itemsRef.current) {
             // TODO -- Scrolling to the last item will put it at the top with empty space below.
             const first = index;
-            itemsRef.current.style.top = '0px';
+            itemsRef.current.style.transform = `translateY(0)`;
             if (first !== firstVisible) {
               setFirstVisible(first);
             }
@@ -139,7 +141,7 @@ export const Scroller: FC<Props> = forwardRef(
 
         requestAnimationFrame(() => {
           if (itemsElmnt) {
-            itemsElmnt.style.top = `${newOffset + (itemOffsets[first] || 0)}px`;
+            itemsElmnt.style.transform = `translateY(${newOffset + (itemOffsets[first] || 0)}px)`;
           }
         });
         if (first !== firstVisible) {
@@ -166,8 +168,6 @@ export const Scroller: FC<Props> = forwardRef(
       scrollSpeed,
     ]);
 
-    const firstVisibleOffset = itemOffsets[firstVisible];
-
     return (
       <>
         <style>{getCommonStyle(idRef.current)}</style>
@@ -177,7 +177,6 @@ export const Scroller: FC<Props> = forwardRef(
               <div
                 key={i + firstVisible}
                 style={{
-                  top: itemOffsets[i + firstVisible] - firstVisibleOffset,
                   height: itemSizes[i + firstVisible],
                 }}
               >
@@ -199,17 +198,7 @@ const getRootStyle = (style?: CSSProperties): CSSProperties => ({
 
 const getCommonStyle = (id: string): string => `
   #${id} > div {
-    position: absolute;
-    left: 0;
-    width: 100%;
-    will-change: top;
-  }
-
-  #${id} > div > div {
-    position: absolute;
-    left: 0;
-    width: 100%;
-    will-change: top;
+    will-change: transform;
   }
 
   #${id} > div > div > * {
