@@ -8,7 +8,7 @@ for (let i = 0; i < 1000; i++) {
 }
 
 export const Basic: FC = () => (
-  <Scroller style={{ height: '500px', width: '200px' }} items={numbers}>
+  <Scroller style={{ height: '500px', width: '200px' }} items={numbers} renderBatchSize={10}>
     {(num: number) => (
       <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
         {num}

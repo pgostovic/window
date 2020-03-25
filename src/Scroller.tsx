@@ -16,13 +16,16 @@ import React, {
 const DEFAULT_SCROLL_SPEED = 1;
 const DEFAULT_ITEM_SIZE = 40;
 
+type ItemSize = number | ((index: number) => number);
+
 interface Props {
   ref?: MutableRefObject<ScrollerRef>;
   items: unknown[];
-  itemSize?: number | ((index: number) => number);
+  itemSize?: ItemSize;
   scrollSpeed?: number;
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
+  renderBatchSize?: number;
   style?: CSSProperties;
   className?: string;
   children(datum: unknown, index: number): ReactNode;
@@ -49,40 +52,41 @@ export const Scroller: FC<Props> = forwardRef(
       scrollSpeed = DEFAULT_SCROLL_SPEED,
       eventSource,
       eventSourceRef,
+      renderBatchSize = 5,
       style,
       className,
       children,
     },
     ref,
   ) => {
-    const idRef = useRef(idIter.next().value);
+    const id: string = useMemo(() => idIter.next().value, []);
     const offsetRef = useRef(0);
     const rootRef = createRef<HTMLDivElement>();
     const itemsRef = createRef<HTMLDivElement>();
     const [height, setHeight] = useState(0);
-    const [firstVisible, setFirstVisible] = useState(0);
+    const itemRenderIndexRef = useRef(0);
+    const [, setRenderFlag] = useState(false); // this is to trigger a render
 
-    const itemSizes: number[] = useMemo(() => {
-      if (typeof itemSize === 'number') {
-        return new Array(items.length).fill(itemSize);
-      } else {
-        return items.map((_, i) => itemSize(i));
-      }
-    }, [items, itemSize]);
+    const setItemRenderIndex = (index: number) => {
+      itemRenderIndexRef.current = index;
+      setRenderFlag(rf => !rf);
+    };
 
-    const itemOffsets = useMemo(() => {
-      const offsets = [0];
-      for (let i = 0; i < itemSizes.length - 1; i++) {
-        offsets.push(offsets[i] + itemSizes[i]);
-      }
-      return offsets;
-    }, [itemSizes]);
+    const itemSizes = useMemo(() => calcSizes(itemSize, items.length), [items, itemSize]);
+    const itemOffsets = useMemo(() => calcOffsets(itemSizes), [itemSizes]);
 
-    const lastIndex = itemOffsets.length - 1;
+    const lastIndex = items.length - 1;
     const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
     const maxOffset = totalSize - height;
 
     const r = ref;
+
+    let itemRenderCount = renderBatchSize;
+    let heightLeft = height;
+    for (let i = itemRenderIndexRef.current; i < items.length && heightLeft > 0; i++) {
+      heightLeft -= itemSizes[i];
+      itemRenderCount++;
+    }
 
     if (r) {
       (r as MutableRefObject<ScrollerRef>).current = {
@@ -90,15 +94,16 @@ export const Scroller: FC<Props> = forwardRef(
           this.scrollToIndex(items.indexOf(item));
         },
         scrollToIndex(index: number) {
-          const newOffset = Math.max(-maxOffset, Math.min(0, -itemOffsets[index]));
+          const newOffset = Math.min(maxOffset, Math.max(0, itemOffsets[index]));
           offsetRef.current = newOffset;
-          if (itemsRef.current) {
-            // TODO -- Scrolling to the last item will put it at the top with empty space below.
-            const first = index;
-            itemsRef.current.style.transform = `translateY(0)`;
-            if (first !== firstVisible) {
-              setFirstVisible(first);
+          // TODO -- Scrolling to the last item will put it at the top with empty space below.
+          requestAnimationFrame(() => {
+            if (itemsRef.current) {
+              itemsRef.current.style.transform = `translateY(0)`;
             }
+          });
+          if (index !== itemRenderIndexRef.current) {
+            setItemRenderIndex(index);
           }
         },
       };
@@ -109,13 +114,6 @@ export const Scroller: FC<Props> = forwardRef(
         setHeight(rootRef.current.getBoundingClientRect().height);
       }
     }, []);
-
-    let numVisible = 0;
-    let heightLeft = height;
-    for (let i = firstVisible; i < items.length && heightLeft > 0; i++) {
-      heightLeft -= itemSizes[i];
-      numVisible++;
-    }
 
     useEffect(() => {
       const source = (eventSource || eventSourceRef?.current || rootRef.current) as
@@ -129,23 +127,28 @@ export const Scroller: FC<Props> = forwardRef(
         if (totalSize < height) {
           return;
         }
-        const newOffset = Math.max(
-          -maxOffset,
-          Math.min(0, offsetRef.current - event.deltaY * scrollSpeed),
-        );
-        offsetRef.current = newOffset;
-        const first = Math.max(
-          0,
-          itemOffsets.findIndex(itemOffset => itemOffset >= -newOffset) - 1,
+
+        const newOffset = Math.min(
+          maxOffset,
+          Math.max(0, offsetRef.current + event.deltaY * scrollSpeed),
         );
 
-        requestAnimationFrame(() => {
-          if (itemsElmnt) {
-            itemsElmnt.style.transform = `translateY(${newOffset + (itemOffsets[first] || 0)}px)`;
-          }
-        });
-        if (first !== firstVisible) {
-          setFirstVisible(first);
+        offsetRef.current = newOffset;
+
+        const firstVisible = itemOffsets.findIndex(itemOffset => itemOffset >= newOffset);
+        const lastVisible = itemOffsets.findIndex(itemOffset => itemOffset >= newOffset + height);
+
+        if (lastVisible > itemRenderIndexRef.current + itemRenderCount) {
+          setItemRenderIndex(itemRenderIndexRef.current + renderBatchSize);
+        } else if (firstVisible < itemRenderIndexRef.current) {
+          setItemRenderIndex(itemRenderIndexRef.current - renderBatchSize);
+        } else {
+          requestAnimationFrame(() => {
+            if (itemsElmnt) {
+              itemsElmnt.style.transform = `translateY(${-newOffset +
+                (itemOffsets[itemRenderIndexRef.current] || 0)}px)`;
+            }
+          });
         }
       };
 
@@ -162,27 +165,36 @@ export const Scroller: FC<Props> = forwardRef(
       eventSourceRef?.current,
       rootRef.current,
       itemsRef.current,
-      firstVisible,
       totalSize,
       height,
       scrollSpeed,
     ]);
 
+    useLayoutEffect(() => {
+      const itemsElmnt = itemsRef.current;
+      requestAnimationFrame(() => {
+        if (itemsElmnt) {
+          itemsElmnt.style.transform = `translateY(${-offsetRef.current +
+            (itemOffsets[itemRenderIndexRef.current] || 0)}px)`;
+        }
+      });
+    }, [itemsRef.current, itemRenderIndexRef.current]);
+
     return (
       <>
-        <style>{getCommonStyle(idRef.current)}</style>
-        <div ref={rootRef} id={idRef.current} style={getRootStyle(style)} className={className}>
+        <style>{getCommonStyle(id)}</style>
+        <div ref={rootRef} id={id} style={getRootStyle(style)} className={className}>
           <div ref={itemsRef}>
-            {items.slice(firstVisible, firstVisible + numVisible).map((item, i) => (
-              <div
-                key={i + firstVisible}
-                style={{
-                  height: itemSizes[i + firstVisible],
-                }}
-              >
-                {children(item, i + firstVisible)}
-              </div>
-            ))}
+            {items
+              .slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount)
+              .map((item, i) => (
+                <div
+                  key={i + itemRenderIndexRef.current}
+                  style={{ height: itemSizes[i + itemRenderIndexRef.current] }}
+                >
+                  {children(item, i + itemRenderIndexRef.current)}
+                </div>
+              ))}
           </div>
         </div>
       </>
@@ -192,7 +204,6 @@ export const Scroller: FC<Props> = forwardRef(
 
 const getRootStyle = (style?: CSSProperties): CSSProperties => ({
   ...style,
-  position: 'relative',
   overflow: 'hidden',
 });
 
@@ -206,3 +217,18 @@ const getCommonStyle = (id: string): string => `
     box-sizing: border-box;
   }
 `;
+
+const calcSizes = (itemSize: ItemSize, count: number): number[] =>
+  typeof itemSize === 'number'
+    ? Array(count).fill(itemSize)
+    : Array(count)
+        .fill(0)
+        .map((_, i) => itemSize(i));
+
+const calcOffsets = (itemSizes: number[]) => {
+  const offsets = itemSizes.length === 0 ? [] : [0];
+  for (let i = 0; i < itemSizes.length - 1; i++) {
+    offsets.push(offsets[i] + itemSizes[i]);
+  }
+  return offsets;
+};
