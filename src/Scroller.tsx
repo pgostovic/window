@@ -29,7 +29,7 @@ interface Props {
   renderBatchSize?: number;
   style?: CSSProperties;
   className?: string;
-  children(datum: unknown, index: number): ReactNode;
+  children(item: unknown, index: number): ReactNode;
 }
 
 export interface ScrollerRef {
@@ -41,7 +41,7 @@ const idIter = (function* nameGen(): IterableIterator<string> {
   let i = 0;
   while (true) {
     i += 1;
-    yield `virtual-${i}`;
+    yield `scroller-${i}`;
   }
 })();
 
@@ -189,8 +189,7 @@ export const Scroller: FC<Props> = forwardRef(
     const renderedItems = items
       .slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount)
       .map((item, i) => {
-        const itemIndex = i + itemRenderIndexRef.current;
-        const renderedItem = children(item, itemIndex) as ReactElement;
+        const renderedItem = children(item, i + itemRenderIndexRef.current) as ReactElement;
         const itemStyle = renderedItem.props.style;
         if (itemStyle) {
           itemStyle.height = renderedItemSizes[i];
@@ -202,8 +201,10 @@ export const Scroller: FC<Props> = forwardRef(
     return (
       <>
         <style>{getCommonStyle(id, renderedItemSizes)}</style>
-        <div ref={rootRef} id={id} style={getRootStyle(style)} className={className}>
-          <div ref={itemsRef}>{renderedItems}</div>
+        <div ref={rootRef} style={getRootStyle(style)} className={className}>
+          <div id={id} ref={itemsRef}>
+            {renderedItems}
+          </div>
         </div>
       </>
     );
@@ -215,28 +216,18 @@ const getRootStyle = (style?: CSSProperties): CSSProperties => ({
   overflow: 'hidden',
 });
 
-const getCommonStyle = (id: string, itemSizes: (number | undefined)[]): string => `
-  #${id} > div {
-    will-change: transform;
-  }
-
-  #${id} > div > * {
-    box-sizing: border-box;
-  }
-
-  ${itemSizes
-    .map((size, i) =>
-      typeof size === 'number'
-        ? `
-    #${id} > div > *:nth-child(${i + 1}) {
-      height: ${size}px;
-    }
-  `
-        : undefined,
-    )
-    .filter(Boolean)
-    .join('\n')}
-`;
+const getCommonStyle = (id: string, itemSizes: (number | undefined)[]): string =>
+  [
+    `#${id} { will-change: transform; }`,
+    `#${id} > * { box-sizing: border-box;}`,
+    ...itemSizes
+      .map((size, i) =>
+        typeof size === 'number'
+          ? `#${id} > *:nth-child(${i + 1}) { height: ${size}px; }`
+          : undefined,
+      )
+      .filter(Boolean),
+  ].join('\n');
 
 const calcSizes = (itemSize: ItemSize, count: number): number[] =>
   typeof itemSize === 'number'
