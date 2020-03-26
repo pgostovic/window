@@ -4,6 +4,7 @@ import React, {
   FC,
   forwardRef,
   MutableRefObject,
+  ReactElement,
   ReactNode,
   RefObject,
   useEffect,
@@ -180,22 +181,29 @@ export const Scroller: FC<Props> = forwardRef(
       });
     }, [itemsRef.current, itemRenderIndexRef.current]);
 
+    const renderedItemSizes: (number | undefined)[] = itemSizes.slice(
+      itemRenderIndexRef.current,
+      itemRenderIndexRef.current + itemRenderCount,
+    );
+
+    const renderedItems = items
+      .slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount)
+      .map((item, i) => {
+        const itemIndex = i + itemRenderIndexRef.current;
+        const renderedItem = children(item, itemIndex) as ReactElement;
+        const itemStyle = renderedItem.props.style;
+        if (itemStyle) {
+          itemStyle.height = renderedItemSizes[i];
+          renderedItemSizes[i] = undefined;
+        }
+        return renderedItem;
+      });
+
     return (
       <>
-        <style>{getCommonStyle(id)}</style>
+        <style>{getCommonStyle(id, renderedItemSizes)}</style>
         <div ref={rootRef} id={id} style={getRootStyle(style)} className={className}>
-          <div ref={itemsRef}>
-            {items
-              .slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount)
-              .map((item, i) => (
-                <div
-                  key={i + itemRenderIndexRef.current}
-                  style={{ height: itemSizes[i + itemRenderIndexRef.current] }}
-                >
-                  {children(item, i + itemRenderIndexRef.current)}
-                </div>
-              ))}
-          </div>
+          <div ref={itemsRef}>{renderedItems}</div>
         </div>
       </>
     );
@@ -207,15 +215,27 @@ const getRootStyle = (style?: CSSProperties): CSSProperties => ({
   overflow: 'hidden',
 });
 
-const getCommonStyle = (id: string): string => `
+const getCommonStyle = (id: string, itemSizes: (number | undefined)[]): string => `
   #${id} > div {
     will-change: transform;
   }
 
-  #${id} > div > div > * {
-    height: 100%;
+  #${id} > div > * {
     box-sizing: border-box;
   }
+
+  ${itemSizes
+    .map((size, i) =>
+      typeof size === 'number'
+        ? `
+    #${id} > div > *:nth-child(${i + 1}) {
+      height: ${size}px;
+    }
+  `
+        : undefined,
+    )
+    .filter(Boolean)
+    .join('\n')}
 `;
 
 const calcSizes = (itemSize: ItemSize, count: number): number[] =>
