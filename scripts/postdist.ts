@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json')).toString());
+
 const {
   author,
   browser,
@@ -10,10 +12,11 @@ const {
   keywords,
   license,
   main,
+  module: pkgModule,
   name: packageName,
   repository,
   version,
-} = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json')).toString());
+} = pkg;
 
 const distPkgJSON = {
   author,
@@ -24,6 +27,8 @@ const distPkgJSON = {
   keywords,
   license,
   main,
+  module: pkgModule,
+  'jsnext:main': pkg['jsnext:main'],
   name: packageName,
   repository,
   version,
