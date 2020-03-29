@@ -1,4 +1,5 @@
 import React, {
+  cloneElement,
   createRef,
   CSSProperties,
   FC,
@@ -27,6 +28,7 @@ interface Props {
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   renderBatchSize?: number;
+  onRenderItems?(info: { items: unknown[]; startIndex: number }): void;
   style?: CSSProperties;
   className?: string;
   children(item: unknown, index: number): ReactNode;
@@ -37,14 +39,6 @@ export interface ScrollerRef {
   scrollToIndex(index: number): void;
 }
 
-const idIter = (function* nameGen(): IterableIterator<string> {
-  let i = 0;
-  while (true) {
-    i += 1;
-    yield `scroller-${i}`;
-  }
-})();
-
 export const Scroller: FC<Props> = forwardRef(
   (
     {
@@ -54,13 +48,14 @@ export const Scroller: FC<Props> = forwardRef(
       eventSource,
       eventSourceRef,
       renderBatchSize = 5,
+      onRenderItems,
       style,
       className,
       children,
     },
-    ref,
+    r,
   ) => {
-    const id: string = useMemo(() => idIter.next().value, []);
+    const ref = r;
     const offsetRef = useRef(0);
     const rootRef = createRef<HTMLDivElement>();
     const itemsRef = createRef<HTMLDivElement>();
@@ -73,14 +68,12 @@ export const Scroller: FC<Props> = forwardRef(
       setRenderFlag(rf => !rf);
     };
 
-    const itemSizes = useMemo(() => calcSizes(itemSize, items.length), [items, itemSize]);
-    const itemOffsets = useMemo(() => calcOffsets(itemSizes), [itemSizes]);
+    const itemSizes = useMemo(() => calculateSizes(itemSize, items.length), [items, itemSize]);
+    const itemOffsets = useMemo(() => calculateOffsets(itemSizes), [itemSizes]);
 
     const lastIndex = items.length - 1;
     const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
     const maxOffset = totalSize - height;
-
-    const r = ref;
 
     let itemRenderCount = renderBatchSize;
     let heightLeft = height;
@@ -89,8 +82,8 @@ export const Scroller: FC<Props> = forwardRef(
       itemRenderCount++;
     }
 
-    if (r) {
-      (r as MutableRefObject<ScrollerRef>).current = {
+    if (ref) {
+      (ref as MutableRefObject<ScrollerRef>).current = {
         scrollToItem(item: undefined) {
           this.scrollToIndex(items.indexOf(item));
         },
@@ -181,7 +174,7 @@ export const Scroller: FC<Props> = forwardRef(
       });
     }, [itemsRef.current, itemRenderIndexRef.current]);
 
-    const renderedItemSizes: (number | undefined)[] = itemSizes.slice(
+    const sizes: (number | undefined)[] = itemSizes.slice(
       itemRenderIndexRef.current,
       itemRenderIndexRef.current + itemRenderCount,
     );
@@ -189,20 +182,25 @@ export const Scroller: FC<Props> = forwardRef(
     const renderedItems = items
       .slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount)
       .map((item, i) => {
-        const renderedItem = children(item, i + itemRenderIndexRef.current) as ReactElement;
-        const itemStyle = renderedItem.props.style;
-        if (itemStyle) {
-          itemStyle.height = renderedItemSizes[i];
-          renderedItemSizes[i] = undefined;
-        }
-        return renderedItem;
+        const itemIndex = i + itemRenderIndexRef.current;
+        const renderedItem = children(item, itemIndex) as ReactElement;
+        const { style, key } = renderedItem.props;
+        return cloneElement(children(item, itemIndex) as ReactElement, {
+          key: key || itemIndex,
+          style: { ...style, height: sizes[i], boxSizing: 'border-box' },
+        });
       });
+
+    useEffect(() => {
+      if (onRenderItems) {
+        onRenderItems({ items: renderedItems, startIndex: itemRenderIndexRef.current });
+      }
+    }, [renderedItems]);
 
     return (
       <>
-        <style>{getCommonStyle(id, renderedItemSizes)}</style>
-        <div ref={rootRef} style={getRootStyle(style)} className={className}>
-          <div id={id} ref={itemsRef}>
+        <div ref={rootRef} style={{ ...style, overflow: 'hidden' }} className={className}>
+          <div ref={itemsRef} style={{ willChange: 'transform' }}>
             {renderedItems}
           </div>
         </div>
@@ -211,32 +209,14 @@ export const Scroller: FC<Props> = forwardRef(
   },
 );
 
-const getRootStyle = (style?: CSSProperties): CSSProperties => ({
-  ...style,
-  overflow: 'hidden',
-});
-
-const getCommonStyle = (id: string, itemSizes: (number | undefined)[]): string =>
-  [
-    `#${id} { will-change: transform; }`,
-    `#${id} > * { box-sizing: border-box;}`,
-    ...itemSizes
-      .map((size, i) =>
-        typeof size === 'number'
-          ? `#${id} > *:nth-child(${i + 1}) { height: ${size}px; }`
-          : undefined,
-      )
-      .filter(Boolean),
-  ].join('\n');
-
-const calcSizes = (itemSize: ItemSize, count: number): number[] =>
+const calculateSizes = (itemSize: ItemSize, count: number): number[] =>
   typeof itemSize === 'number'
     ? Array(count).fill(itemSize)
     : Array(count)
         .fill(0)
         .map((_, i) => itemSize(i));
 
-const calcOffsets = (itemSizes: number[]) => {
+const calculateOffsets = (itemSizes: number[]) => {
   const offsets = itemSizes.length === 0 ? [] : [0];
   for (let i = 0; i < itemSizes.length - 1; i++) {
     offsets.push(offsets[i] + itemSizes[i]);
