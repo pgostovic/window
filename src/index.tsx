@@ -39,6 +39,13 @@ export interface ScrollerRef {
   scrollToIndex(index: number): void;
 }
 
+interface TouchInfo {
+  t: number;
+  y: number;
+  dy: number;
+  pid?: NodeJS.Timeout;
+}
+
 export const Scroller: FC<Props> = forwardRef(
   (
     {
@@ -57,11 +64,7 @@ export const Scroller: FC<Props> = forwardRef(
   ) => {
     const ref = r;
     const offsetRef = useRef(0);
-    const touchInfoRef = useRef<{ t: number; y: number; dy: number; pid?: NodeJS.Timeout }>({
-      t: 0,
-      y: 0,
-      dy: 0,
-    });
+    const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
     const rootRef = createRef<HTMLDivElement>();
     const itemsRef = createRef<HTMLDivElement>();
     const [height, setHeight] = useState(0);
@@ -69,7 +72,7 @@ export const Scroller: FC<Props> = forwardRef(
     const [, setRenderFlag] = useState(false); // this is to trigger a render
 
     const setItemRenderIndex = (index: number) => {
-      itemRenderIndexRef.current = index;
+      itemRenderIndexRef.current = Math.max(0, index);
       setRenderFlag(rf => !rf);
     };
 
@@ -95,14 +98,19 @@ export const Scroller: FC<Props> = forwardRef(
         scrollToIndex(index: number) {
           const newOffset = Math.min(maxOffset, Math.max(0, itemOffsets[index]));
           offsetRef.current = newOffset;
-          // TODO -- Scrolling to the last item will put it at the top with empty space below.
           requestAnimationFrame(() => {
             if (itemsRef.current) {
               itemsRef.current.style.transform = `translateY(0)`;
             }
           });
-          if (index !== itemRenderIndexRef.current) {
-            setItemRenderIndex(index);
+
+          const firstVisible = Math.max(
+            0,
+            itemOffsets.findIndex(itemOffset => itemOffset >= newOffset) - 1,
+          );
+
+          if (firstVisible !== itemRenderIndexRef.current) {
+            setItemRenderIndex(firstVisible);
           }
         },
       };
@@ -193,7 +201,6 @@ export const Scroller: FC<Props> = forwardRef(
         }, 16);
 
         touchInfoRef.current = { ...touchInfo, pid };
-
         event.preventDefault();
       };
 
