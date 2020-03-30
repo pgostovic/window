@@ -8,7 +8,7 @@
   "scripts": {
     "preinstall": "scripts/preinstall.sh",
     "postdist": "rimraf dist/__tests__; ts-node --project scripts/tsconfig.json scripts/postdist",
-    "dist": "rollup -c",
+    "dist": "rollup -c rollup.ts",
     "clean": "rimraf dist",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook",
@@ -37,6 +37,7 @@
     "@types/react": "^16.9.25",
     "@types/react-dom": "^16.9.5",
     "@types/react-window": "^1.8.1",
+    "@types/rollup-plugin-peer-deps-external": "^2.2.0",
     "@typescript-eslint/eslint-plugin": "^2.24.0",
     "@typescript-eslint/parser": "^2.24.0",
     "babel-loader": "^8.1.0",
@@ -59,5 +60,6 @@
     "ts-loader": "^6.2.2",
     "ts-node": "^8.8.1",
     "typescript": "^3.8.3"
-  }
+  },
+  "dependencies": {}
 }
