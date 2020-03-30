@@ -57,6 +57,11 @@ export const Scroller: FC<Props> = forwardRef(
   ) => {
     const ref = r;
     const offsetRef = useRef(0);
+    const touchInfoRef = useRef<{ t: number; y: number; dy: number; pid?: NodeJS.Timeout }>({
+      t: 0,
+      y: 0,
+      dy: 0,
+    });
     const rootRef = createRef<HTMLDivElement>();
     const itemsRef = createRef<HTMLDivElement>();
     const [height, setHeight] = useState(0);
@@ -116,7 +121,7 @@ export const Scroller: FC<Props> = forwardRef(
 
       const itemsElmnt = itemsRef.current;
 
-      const onWheel = (event: WheelEvent) => {
+      const scroll = (deltaY: number) => {
         // Don't allow scrolling if items don't fill the scroll window.
         if (totalSize < height) {
           return;
@@ -124,7 +129,7 @@ export const Scroller: FC<Props> = forwardRef(
 
         const newOffset = Math.min(
           maxOffset,
-          Math.max(0, offsetRef.current + event.deltaY * scrollSpeed),
+          Math.max(0, offsetRef.current + deltaY * scrollSpeed),
         );
 
         offsetRef.current = newOffset;
@@ -146,23 +151,67 @@ export const Scroller: FC<Props> = forwardRef(
         }
       };
 
+      const onWheel = (event: WheelEvent) => {
+        scroll(event.deltaY);
+      };
+
+      const onTouchStart = (event: TouchEvent) => {
+        if (touchInfoRef.current.pid) {
+          clearInterval(touchInfoRef.current.pid);
+          touchInfoRef.current.pid = undefined;
+        }
+
+        const t = event.timeStamp;
+        const y = event.touches[0].clientY;
+        touchInfoRef.current = { t, y, dy: 0 };
+        event.preventDefault();
+      };
+
+      const onTouchMove = (event: TouchEvent) => {
+        const t = event.timeStamp;
+        const y = event.touches[0].clientY;
+        const dy = touchInfoRef.current.y - y;
+        scroll(dy);
+        touchInfoRef.current = { t, y, dy };
+        event.preventDefault();
+      };
+
+      const onTouchEnd = (event: TouchEvent) => {
+        const touchInfo = touchInfoRef.current;
+
+        const t = event.timeStamp;
+        let speed = touchInfo.dy / (t - touchInfo.t);
+
+        const pid = setInterval(() => {
+          const dy = speed * 16;
+          scroll(dy);
+          speed = speed * 0.95;
+          if (Math.abs(speed) < 0.01) {
+            clearInterval(pid);
+            touchInfoRef.current.pid = undefined;
+          }
+        }, 16);
+
+        touchInfoRef.current = { ...touchInfo, pid };
+
+        event.preventDefault();
+      };
+
       if (source) {
         source.addEventListener('wheel', onWheel, { passive: true });
+        source.addEventListener('touchstart', onTouchStart);
+        source.addEventListener('touchmove', onTouchMove);
+        source.addEventListener('touchend', onTouchEnd);
       }
       return () => {
         if (source) {
           source.removeEventListener('wheel', onWheel);
+          source.removeEventListener('touchstart', onTouchStart);
+          source.removeEventListener('touchmove', onTouchMove);
+          source.removeEventListener('touchend', onTouchEnd);
         }
       };
-    }, [
-      eventSource,
-      eventSourceRef?.current,
-      rootRef.current,
-      itemsRef.current,
-      totalSize,
-      height,
-      scrollSpeed,
-    ]);
+    }, [totalSize, height, scrollSpeed]);
 
     useLayoutEffect(() => {
       const itemsElmnt = itemsRef.current;
@@ -172,7 +221,7 @@ export const Scroller: FC<Props> = forwardRef(
             (itemOffsets[itemRenderIndexRef.current] || 0)}px)`;
         }
       });
-    }, [itemsRef.current, itemRenderIndexRef.current]);
+    }, [itemRenderIndexRef.current]);
 
     const sizes: (number | undefined)[] = itemSizes.slice(
       itemRenderIndexRef.current,
