@@ -235,17 +235,10 @@ export const Scroller: FC<Props> = forwardRef(
       itemRenderIndexRef.current + itemRenderCount,
     );
 
-    const renderedItems = items
-      .slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount)
-      .map((item, i) => {
-        const itemIndex = i + itemRenderIndexRef.current;
-        const renderedItem = children(item, itemIndex) as ReactElement;
-        const { style, key } = renderedItem.props;
-        return cloneElement(children(item, itemIndex) as ReactElement, {
-          key: key || itemIndex,
-          style: { ...style, height: sizes[i], boxSizing: 'border-box' },
-        });
-      });
+    const renderedItems = items.slice(
+      itemRenderIndexRef.current,
+      itemRenderIndexRef.current + itemRenderCount,
+    );
 
     useEffect(() => {
       if (onRenderItems) {
@@ -253,11 +246,21 @@ export const Scroller: FC<Props> = forwardRef(
       }
     }, [renderedItems]);
 
+    const renderedItemsElements = renderedItems.map((item, i) => {
+      const itemIndex = i + itemRenderIndexRef.current;
+      const renderedItem = children(item, itemIndex) as ReactElement;
+      const { style, key } = renderedItem.props;
+      return cloneElement(children(item, itemIndex) as ReactElement, {
+        key: key || itemIndex,
+        style: { ...style, height: sizes[i], boxSizing: 'border-box' },
+      });
+    });
+
     return (
       <>
         <div ref={rootRef} style={{ ...style, overflow: 'hidden' }} className={className}>
           <div ref={itemsRef} style={{ willChange: 'transform' }}>
-            {renderedItems}
+            {renderedItemsElements}
           </div>
         </div>
       </>
