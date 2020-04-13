@@ -24,6 +24,7 @@ interface Props {
   ref?: MutableRefObject<ScrollerRef>;
   items: unknown[];
   itemSize?: ItemSize;
+  scrollToIndex?: number;
   scrollSpeed?: number;
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
@@ -51,6 +52,7 @@ export const Scroller: FC<Props> = forwardRef(
     {
       items,
       itemSize = DEFAULT_ITEM_SIZE,
+      scrollToIndex = 0,
       scrollSpeed = DEFAULT_SCROLL_SPEED,
       eventSource,
       eventSourceRef,
@@ -64,6 +66,7 @@ export const Scroller: FC<Props> = forwardRef(
   ) => {
     const ref = r;
     const offsetRef = useRef(0);
+    const scrollToIndexRef = useRef(0);
     const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
     const rootRef = createRef<HTMLDivElement>();
     const itemsRef = createRef<HTMLDivElement>();
@@ -82,6 +85,12 @@ export const Scroller: FC<Props> = forwardRef(
     const lastIndex = items.length - 1;
     const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
     const maxOffset = totalSize - height;
+
+    if (scrollToIndex !== scrollToIndexRef.current) {
+      offsetRef.current = Math.min(maxOffset, Math.max(0, itemOffsets[scrollToIndex]));
+      itemRenderIndexRef.current = scrollToIndex;
+      scrollToIndexRef.current = scrollToIndex;
+    }
 
     let itemRenderCount = renderBatchSize;
     let heightLeft = height;

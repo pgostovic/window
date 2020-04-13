@@ -25,7 +25,12 @@ export const ScrollToIndex: FC = () => {
     <div>
       <button onClick={() => windowRef.current.scrollToIndex(0)}>Scroll to index 0</button>
       <button onClick={() => windowRef.current.scrollToIndex(100)}>Scroll to index 100</button>
-      <Scroller ref={windowRef} style={{ height: '500px', width: '200px' }} items={people}>
+      <Scroller
+        ref={windowRef}
+        style={{ height: '500px', width: '200px' }}
+        scrollToIndex={50}
+        items={people}
+      >
         {(person: Person, i) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             {i} - {person.firstName} {person.lastName}
