@@ -239,14 +239,15 @@ export const Scroller: FC<Props> = forwardRef(
       });
     }, [itemRenderIndexRef.current]);
 
-    const sizes: (number | undefined)[] = itemSizes.slice(
-      itemRenderIndexRef.current,
-      itemRenderIndexRef.current + itemRenderCount,
+    const sizes: (number | undefined)[] = useMemo(
+      () =>
+        itemSizes.slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount),
+      [itemRenderIndexRef.current, itemRenderCount],
     );
 
-    const renderedItems = items.slice(
-      itemRenderIndexRef.current,
-      itemRenderIndexRef.current + itemRenderCount,
+    const renderedItems = useMemo(
+      () => items.slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount),
+      [itemRenderIndexRef.current, itemRenderCount],
     );
 
     useEffect(() => {
