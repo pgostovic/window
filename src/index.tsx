@@ -8,6 +8,7 @@ import React, {
   ReactElement,
   ReactNode,
   RefObject,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -65,22 +66,61 @@ export const Scroller: FC<Props> = forwardRef(
     r,
   ) => {
     const ref = r;
-    const offsetRef = useRef(0);
-    const scrollToIndexRef = useRef(0);
-    const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
     const rootRef = createRef<HTMLDivElement>();
     const itemsRef = createRef<HTMLDivElement>();
-    const [height, setHeight] = useState(0);
     const itemRenderIndexRef = useRef(0);
-    const [, setRenderFlag] = useState(false); // this is to trigger a render
+    const offsetRef = useRef(0);
+    const rafPidRef = useRef(0);
+    const scrollToIndexRef = useRef(0);
+    const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
 
-    const setItemRenderIndex = (index: number) => {
-      itemRenderIndexRef.current = Math.max(0, index);
-      setRenderFlag(rf => !rf);
-    };
+    const [height, setHeight] = useState(0);
+    const [, setRenderFlag] = useState(false); // this is to trigger a render
 
     const itemSizes = useMemo(() => calculateSizes(itemSize, items.length), [items, itemSize]);
     const itemOffsets = useMemo(() => calculateOffsets(itemSizes), [itemSizes]);
+
+    const setOffset = useCallback(
+      (itemsElmnt: HTMLDivElement | null, offset: number) => {
+        offsetRef.current = offset;
+        if (itemsElmnt) {
+          let itemRenderIndex = itemRenderIndexRef.current;
+
+          const firstVisible = itemOffsets.findIndex(itemOffset => itemOffset >= offset);
+          const lastVisible = itemOffsets.findIndex(itemOffset => itemOffset >= offset + height);
+
+          if (lastVisible > itemRenderIndex + itemRenderCount) {
+            itemRenderIndex = Math.max(
+              lastVisible - itemRenderCount,
+              itemRenderIndex + renderBatchSize,
+            );
+          } else if (firstVisible < itemRenderIndex) {
+            itemRenderIndex = Math.max(
+              0,
+              Math.min(firstVisible, itemRenderIndex - renderBatchSize),
+            );
+          }
+
+          if (rafPidRef.current !== 0) {
+            cancelAnimationFrame(rafPidRef.current);
+          }
+          rafPidRef.current = requestAnimationFrame(() => {
+            rafPidRef.current = 0;
+
+            // set items container translate transform
+            const translateY = -offset + (itemOffsets[itemRenderIndex] || 0);
+            itemsElmnt.style.transform = `translateY(${translateY}px)`;
+
+            // render items if needed
+            if (itemRenderIndex !== itemRenderIndexRef.current) {
+              itemRenderIndexRef.current = itemRenderIndex;
+              setRenderFlag(rf => !rf);
+            }
+          });
+        }
+      },
+      [height, itemOffsets],
+    );
 
     const lastIndex = items.length - 1;
     const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
@@ -105,22 +145,7 @@ export const Scroller: FC<Props> = forwardRef(
           this.scrollToIndex(items.indexOf(item));
         },
         scrollToIndex(index: number) {
-          const newOffset = Math.min(maxOffset, Math.max(0, itemOffsets[index]));
-          offsetRef.current = newOffset;
-          requestAnimationFrame(() => {
-            if (itemsRef.current) {
-              itemsRef.current.style.transform = `translateY(0)`;
-            }
-          });
-
-          const firstVisible = Math.max(
-            0,
-            itemOffsets.findIndex(itemOffset => itemOffset >= newOffset) - 1,
-          );
-
-          if (firstVisible !== itemRenderIndexRef.current) {
-            setItemRenderIndex(firstVisible);
-          }
+          setOffset(itemsRef.current, Math.min(maxOffset, Math.max(0, itemOffsets[index])));
         },
       };
     }
@@ -144,28 +169,10 @@ export const Scroller: FC<Props> = forwardRef(
           return;
         }
 
-        const newOffset = Math.min(
-          maxOffset,
-          Math.max(0, offsetRef.current + deltaY * scrollSpeed),
+        setOffset(
+          itemsElmnt,
+          Math.min(maxOffset, Math.max(0, offsetRef.current + deltaY * scrollSpeed)),
         );
-
-        offsetRef.current = newOffset;
-
-        const firstVisible = itemOffsets.findIndex(itemOffset => itemOffset >= newOffset);
-        const lastVisible = itemOffsets.findIndex(itemOffset => itemOffset >= newOffset + height);
-
-        if (lastVisible > itemRenderIndexRef.current + itemRenderCount) {
-          setItemRenderIndex(itemRenderIndexRef.current + renderBatchSize);
-        } else if (firstVisible < itemRenderIndexRef.current) {
-          setItemRenderIndex(itemRenderIndexRef.current - renderBatchSize);
-        } else {
-          requestAnimationFrame(() => {
-            if (itemsElmnt) {
-              itemsElmnt.style.transform = `translateY(${-newOffset +
-                (itemOffsets[itemRenderIndexRef.current] || 0)}px)`;
-            }
-          });
-        }
       };
 
       const onWheel = (event: WheelEvent) => {
@@ -228,16 +235,6 @@ export const Scroller: FC<Props> = forwardRef(
         }
       };
     }, [totalSize, height, scrollSpeed]);
-
-    useLayoutEffect(() => {
-      const itemsElmnt = itemsRef.current;
-      requestAnimationFrame(() => {
-        if (itemsElmnt) {
-          itemsElmnt.style.transform = `translateY(${-offsetRef.current +
-            (itemOffsets[itemRenderIndexRef.current] || 0)}px)`;
-        }
-      });
-    }, [itemRenderIndexRef.current]);
 
     const sizes: (number | undefined)[] = useMemo(
       () =>
