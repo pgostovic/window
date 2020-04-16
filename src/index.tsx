@@ -10,7 +10,6 @@ import React, {
   RefObject,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -66,16 +65,15 @@ export const Scroller: FC<Props> = forwardRef(
     r,
   ) => {
     const ref = r;
-    const rootRef = createRef<HTMLDivElement>();
-    const itemsRef = createRef<HTMLDivElement>();
-    const itemRenderIndexRef = useRef(0);
+    const rootElmntRef = createRef<HTMLDivElement>();
+    const itemsElmntRef = createRef<HTMLDivElement>();
+    const renderWindowRef = useRef({ from: 0, to: 0 });
     const offsetRef = useRef(0);
     const rafPidRef = useRef(0);
-    const scrollToIndexRef = useRef(0);
-    const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
-
-    const [height, setHeight] = useState(0);
     const [, setRenderFlag] = useState(false); // this is to trigger a render
+
+    const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
+    const heightRef = useRef(0);
 
     const itemSizes = useMemo(() => calculateSizes(itemSize, items.length), [items, itemSize]);
     const itemOffsets = useMemo(() => calculateOffsets(itemSizes), [itemSizes]);
@@ -84,22 +82,31 @@ export const Scroller: FC<Props> = forwardRef(
       (itemsElmnt: HTMLDivElement | null, offset: number) => {
         offsetRef.current = offset;
         if (itemsElmnt) {
-          let itemRenderIndex = itemRenderIndexRef.current;
+          const height = heightRef.current;
+          const renderWindow = renderWindowRef.current;
+          let { from, to } = renderWindow;
 
-          const firstVisible = itemOffsets.findIndex(itemOffset => itemOffset >= offset);
-          const lastVisible = itemOffsets.findIndex(itemOffset => itemOffset >= offset + height);
-
-          if (lastVisible > itemRenderIndex + itemRenderCount) {
-            itemRenderIndex = Math.max(
-              lastVisible - itemRenderCount,
-              itemRenderIndex + renderBatchSize,
-            );
-          } else if (firstVisible < itemRenderIndex) {
-            itemRenderIndex = Math.max(
-              0,
-              Math.min(firstVisible, itemRenderIndex - renderBatchSize),
-            );
+          let visibleFrom = itemOffsets.findIndex(itemOffset => itemOffset >= offset);
+          while (itemOffsets[visibleFrom] > offset) {
+            visibleFrom -= 1;
           }
+          let visibleTo = itemOffsets.findIndex(itemOffset => itemOffset >= offset + height);
+          if (visibleTo === -1) {
+            visibleTo = items.length;
+          }
+
+          if (visibleFrom < from) {
+            from = visibleFrom - renderBatchSize;
+            to = visibleTo;
+          }
+
+          if (visibleTo > to) {
+            to = visibleTo + renderBatchSize;
+            from = visibleFrom;
+          }
+
+          from = Math.max(from, 0);
+          to = Math.min(to, itemOffsets.length);
 
           if (rafPidRef.current !== 0) {
             cancelAnimationFrame(rafPidRef.current);
@@ -108,36 +115,26 @@ export const Scroller: FC<Props> = forwardRef(
             rafPidRef.current = 0;
 
             // set items container translate transform
-            const translateY = -offset + (itemOffsets[itemRenderIndex] || 0);
+            const translateY = -offset + (itemOffsets[from] || 0);
+            if (translateY > 0) {
+              console.log('Problem', translateY, visibleFrom, visibleTo);
+            }
             itemsElmnt.style.transform = `translateY(${translateY}px)`;
 
             // render items if needed
-            if (itemRenderIndex !== itemRenderIndexRef.current) {
-              itemRenderIndexRef.current = itemRenderIndex;
+            if (from !== renderWindow.from || to !== renderWindow.to) {
+              renderWindowRef.current = { from, to };
               setRenderFlag(rf => !rf);
             }
           });
         }
       },
-      [height, itemOffsets],
+      [itemOffsets],
     );
 
     const lastIndex = items.length - 1;
     const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
-    const maxOffset = totalSize - height;
-
-    if (scrollToIndex !== scrollToIndexRef.current) {
-      offsetRef.current = Math.min(maxOffset, Math.max(0, itemOffsets[scrollToIndex]));
-      itemRenderIndexRef.current = scrollToIndex;
-      scrollToIndexRef.current = scrollToIndex;
-    }
-
-    let itemRenderCount = renderBatchSize;
-    let heightLeft = height;
-    for (let i = itemRenderIndexRef.current; i < items.length && heightLeft > 0; i++) {
-      heightLeft -= itemSizes[i];
-      itemRenderCount++;
-    }
+    const maxOffset = totalSize - heightRef.current;
 
     if (ref) {
       (ref as MutableRefObject<ScrollerRef>).current = {
@@ -145,27 +142,36 @@ export const Scroller: FC<Props> = forwardRef(
           this.scrollToIndex(items.indexOf(item));
         },
         scrollToIndex(index: number) {
-          setOffset(itemsRef.current, Math.min(maxOffset, Math.max(0, itemOffsets[index])));
+          setOffset(itemsElmntRef.current, Math.min(maxOffset, Math.max(0, itemOffsets[index])));
         },
       };
     }
 
-    useLayoutEffect(() => {
-      if (rootRef.current) {
-        setHeight(rootRef.current.getBoundingClientRect().height);
+    useEffect(() => {
+      if (rootElmntRef.current) {
+        heightRef.current = rootElmntRef.current.getBoundingClientRect().height;
       }
     }, []);
 
     useEffect(() => {
-      const source = (eventSource || eventSourceRef?.current || rootRef.current) as
+      if (itemsElmntRef.current) {
+        setOffset(
+          itemsElmntRef.current,
+          Math.min(maxOffset, Math.max(0, itemOffsets[scrollToIndex])),
+        );
+      }
+    }, [scrollToIndex]);
+
+    useEffect(() => {
+      const source = (eventSource || eventSourceRef?.current || rootElmntRef.current) as
         | HTMLElement
         | undefined;
 
-      const itemsElmnt = itemsRef.current;
+      const itemsElmnt = itemsElmntRef.current;
 
       const scroll = (deltaY: number) => {
         // Don't allow scrolling if items don't fill the scroll window.
-        if (totalSize < height) {
+        if (totalSize < heightRef.current) {
           return;
         }
 
@@ -176,6 +182,7 @@ export const Scroller: FC<Props> = forwardRef(
       };
 
       const onWheel = (event: WheelEvent) => {
+        event.preventDefault();
         scroll(event.deltaY);
       };
 
@@ -220,13 +227,22 @@ export const Scroller: FC<Props> = forwardRef(
         event.preventDefault();
       };
 
+      const onWindowWheel = (event: WheelEvent) => {
+        const target = event.target as HTMLDivElement;
+        if (target.closest('.phnq-window-items')) {
+          event.preventDefault();
+        }
+      };
+
+      window.addEventListener('wheel', onWindowWheel, { passive: false });
       if (source) {
-        source.addEventListener('wheel', onWheel, { passive: true });
+        source.addEventListener('wheel', onWheel, { passive: false });
         source.addEventListener('touchstart', onTouchStart);
         source.addEventListener('touchmove', onTouchMove);
         source.addEventListener('touchend', onTouchEnd);
       }
       return () => {
+        window.removeEventListener('wheel', onWindowWheel);
         if (source) {
           source.removeEventListener('wheel', onWheel);
           source.removeEventListener('touchstart', onTouchStart);
@@ -234,43 +250,34 @@ export const Scroller: FC<Props> = forwardRef(
           source.removeEventListener('touchend', onTouchEnd);
         }
       };
-    }, [totalSize, height, scrollSpeed]);
+    }, [totalSize, maxOffset, scrollSpeed]);
 
-    const sizes: (number | undefined)[] = useMemo(
-      () =>
-        itemSizes.slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount),
-      [itemRenderIndexRef.current, itemRenderCount],
-    );
-
-    const renderedItems = useMemo(
-      () => items.slice(itemRenderIndexRef.current, itemRenderIndexRef.current + itemRenderCount),
-      [itemRenderIndexRef.current, itemRenderCount],
-    );
+    const renderWindow = renderWindowRef.current;
+    const sizes = itemSizes.slice(renderWindow.from, renderWindow.to);
+    const renderedItems = items.slice(renderWindow.from, renderWindow.to);
 
     useEffect(() => {
-      if (onRenderItems) {
-        onRenderItems({ items: renderedItems, startIndex: itemRenderIndexRef.current });
+      if (onRenderItems && renderedItems.length > 0) {
+        onRenderItems({ items: renderedItems, startIndex: renderWindow.from });
       }
     }, [renderedItems]);
 
     const renderedItemsElements = renderedItems.map((item, i) => {
-      const itemIndex = i + itemRenderIndexRef.current;
+      const itemIndex = i + renderWindow.from;
       const renderedItem = children(item, itemIndex) as ReactElement;
       const { style, key } = renderedItem.props;
-      return cloneElement(children(item, itemIndex) as ReactElement, {
+      return cloneElement(renderedItem, {
         key: key || itemIndex,
         style: { ...style, height: sizes[i], boxSizing: 'border-box' },
       });
     });
 
     return (
-      <>
-        <div ref={rootRef} style={{ ...style, overflow: 'hidden' }} className={className}>
-          <div ref={itemsRef} style={{ willChange: 'transform' }}>
-            {renderedItemsElements}
-          </div>
+      <div ref={rootElmntRef} style={{ ...style, overflow: 'hidden' }} className={className}>
+        <div ref={itemsElmntRef} style={{ willChange: 'transform' }} className="phnq-window-items">
+          {renderedItemsElements}
         </div>
-      </>
+      </div>
     );
   },
 );
