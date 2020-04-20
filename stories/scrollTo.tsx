@@ -28,7 +28,7 @@ export const ScrollToIndex: FC = () => {
       <Scroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
-        scrollToIndex={50}
+        scrollTo={{ index: 50 }}
         items={people}
       >
         {(person: Person, i) => (
