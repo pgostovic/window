@@ -24,7 +24,8 @@ interface Props {
   ref?: MutableRefObject<ScrollerRef>;
   items: unknown[];
   itemSize?: ItemSize;
-  scrollTo?: { index: number; position?: number };
+  initScroll?: { index: number; position?: number };
+  initOffset?: number;
   scrollSpeed?: number;
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
@@ -38,6 +39,8 @@ interface Props {
 export interface ScrollerRef {
   scrollToItem(item: unknown, position?: number): void;
   scrollToIndex(index: number, position?: number): void;
+  getOffset(): number;
+  setOffset(offset: number): void;
 }
 
 interface TouchInfo {
@@ -52,8 +55,9 @@ export const Scroller: FC<Props> = forwardRef(
     {
       items,
       itemSize = DEFAULT_ITEM_SIZE,
-      scrollTo = { index: 0, position: 0 },
+      initScroll = { index: 0, position: 0 },
       scrollSpeed = DEFAULT_SCROLL_SPEED,
+      initOffset,
       eventSource,
       eventSourceRef,
       renderBatchSize = 5,
@@ -147,6 +151,12 @@ export const Scroller: FC<Props> = forwardRef(
           const itemOffset = Math.min(maxOffset, Math.max(0, itemOffsets[index]));
           setOffset(itemsElmntRef.current, itemOffset - (height - itemSize) * position);
         },
+        getOffset() {
+          return offsetRef.current;
+        },
+        setOffset(offset: number) {
+          setOffset(itemsElmntRef.current, offset);
+        },
       };
     }
 
@@ -158,16 +168,19 @@ export const Scroller: FC<Props> = forwardRef(
 
     useEffect(() => {
       if (itemsElmntRef.current) {
-        const height = heightRef.current;
-        const itemSize = itemSizes[scrollTo.index] || 0;
-        const itemOffset = Math.min(maxOffset, Math.max(0, itemOffsets[scrollTo.index]));
-
-        setOffset(
-          itemsElmntRef.current,
-          itemOffset - (height - itemSize) * (scrollTo.position || 0),
-        );
+        if (initOffset !== undefined) {
+          setOffset(itemsElmntRef.current, initOffset);
+        } else {
+          const height = heightRef.current;
+          const itemSize = itemSizes[initScroll.index] || 0;
+          const itemOffset = Math.min(maxOffset, Math.max(0, itemOffsets[initScroll.index]));
+          setOffset(
+            itemsElmntRef.current,
+            itemOffset - (height - itemSize) * (initScroll.position || 0),
+          );
+        }
       }
-    }, [scrollTo]);
+    }, []);
 
     useEffect(() => {
       const source = (eventSource || eventSourceRef?.current || rootElmntRef.current) as

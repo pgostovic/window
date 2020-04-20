@@ -23,12 +23,14 @@ export const ScrollToIndex: FC = () => {
 
   return (
     <div>
+      <p>The initScroll prop is set to 50.</p>
       <button onClick={() => windowRef.current.scrollToIndex(0)}>Scroll to index 0</button>
       <button onClick={() => windowRef.current.scrollToIndex(100)}>Scroll to index 100</button>
+      <button onClick={() => windowRef.current.setOffset(1100)}>Scroll to offset 1100px</button>
       <Scroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
-        scrollTo={{ index: 50 }}
+        initScroll={{ index: 50 }}
         items={people}
       >
         {(person: Person, i) => (
