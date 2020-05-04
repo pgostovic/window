@@ -2,7 +2,6 @@ import React, {
   cloneElement,
   createRef,
   CSSProperties,
-  FC,
   forwardRef,
   MutableRefObject,
   ReactElement,
@@ -21,7 +20,6 @@ const DEFAULT_ITEM_SIZE = 40;
 type ItemSize = number | ((index: number) => number);
 
 interface Props {
-  ref?: MutableRefObject<ScrollerRef>;
   items: unknown[];
   itemSize?: ItemSize;
   initScroll?: { index: number; position?: number };
@@ -50,7 +48,7 @@ interface TouchInfo {
   pid?: NodeJS.Timeout;
 }
 
-export const Scroller: FC<Props> = forwardRef(
+export const Scroller = forwardRef<ScrollerRef, Props>(
   (
     {
       items,
@@ -68,7 +66,7 @@ export const Scroller: FC<Props> = forwardRef(
     },
     r,
   ) => {
-    const ref = r;
+    const ref = r as MutableRefObject<ScrollerRef> | undefined;
     const rootElmntRef = createRef<HTMLDivElement>();
     const itemsElmntRef = createRef<HTMLDivElement>();
     const renderWindowRef = useRef({ from: 0, to: 0 });
@@ -141,7 +139,7 @@ export const Scroller: FC<Props> = forwardRef(
     const maxOffset = totalSize - heightRef.current;
 
     if (ref) {
-      (ref as MutableRefObject<ScrollerRef>).current = {
+      ref.current = {
         scrollToItem(item: undefined, position = 0) {
           this.scrollToIndex(items.indexOf(item), position);
         },
