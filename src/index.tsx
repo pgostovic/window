@@ -1,3 +1,4 @@
+import detectIt from 'detect-it';
 import React, {
   cloneElement,
   createRef,
@@ -200,7 +201,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       };
 
       const onWheel = (event: WheelEvent) => {
-        event.preventDefault();
         scroll(event.deltaY);
       };
 
@@ -213,7 +213,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const t = event.timeStamp;
         const y = event.touches[0].clientY;
         touchInfoRef.current = { t, y, dy: 0 };
-        event.preventDefault();
       };
 
       const onTouchMove = (event: TouchEvent) => {
@@ -222,7 +221,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const dy = touchInfoRef.current.y - y;
         scroll(dy);
         touchInfoRef.current = { t, y, dy };
-        event.preventDefault();
       };
 
       const onTouchEnd = (event: TouchEvent) => {
@@ -242,25 +240,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         }, 16);
 
         touchInfoRef.current = { ...touchInfo, pid };
-        event.preventDefault();
       };
 
-      const onWindowWheel = (event: WheelEvent) => {
-        const target = event.target as HTMLDivElement;
-        if (target.closest('.phnq-window-items')) {
-          event.preventDefault();
-        }
-      };
+      const listenerOptions = detectIt.passiveEvents ? { passive: true } : false;
 
-      window.addEventListener('wheel', onWindowWheel, { passive: false });
       if (source) {
-        source.addEventListener('wheel', onWheel, { passive: false });
-        source.addEventListener('touchstart', onTouchStart);
-        source.addEventListener('touchmove', onTouchMove);
+        source.addEventListener('wheel', onWheel, listenerOptions);
+        source.addEventListener('touchstart', onTouchStart, listenerOptions);
+        source.addEventListener('touchmove', onTouchMove, listenerOptions);
         source.addEventListener('touchend', onTouchEnd);
       }
       return () => {
-        window.removeEventListener('wheel', onWindowWheel);
         if (source) {
           source.removeEventListener('wheel', onWheel);
           source.removeEventListener('touchstart', onTouchStart);
@@ -292,7 +282,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     return (
       <div ref={rootElmntRef} style={{ ...style, overflow: 'hidden' }} className={className}>
-        <div ref={itemsElmntRef} style={{ willChange: 'transform' }} className="phnq-window-items">
+        <div ref={itemsElmntRef} style={{ willChange: 'transform' }}>
           {renderedItemsElements}
         </div>
       </div>
