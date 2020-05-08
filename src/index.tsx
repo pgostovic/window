@@ -1,4 +1,3 @@
-import detectIt from 'detect-it';
 import React, {
   cloneElement,
   createRef,
@@ -242,7 +241,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         touchInfoRef.current = { ...touchInfo, pid };
       };
 
-      const listenerOptions = detectIt.passiveEvents ? { passive: true } : false;
+      const listenerOptions = mayUsePassive ? { passive: true } : false;
 
       if (source) {
         source.addEventListener('wheel', onWheel, listenerOptions);
@@ -304,3 +303,22 @@ const calculateOffsets = (itemSizes: number[]) => {
   }
   return offsets;
 };
+
+const mayUsePassive = (() => {
+  try {
+    let supportsPassive = false;
+    const opts = Object.defineProperty({}, 'passive', {
+      get(): boolean {
+        supportsPassive = true;
+        return true;
+      },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    const fn = () => {};
+    window.addEventListener('testPassive', fn, opts);
+    window.removeEventListener('testPassive', fn, opts);
+    return supportsPassive;
+  } catch (err) {
+    return false;
+  }
+})();
