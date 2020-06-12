@@ -29,6 +29,7 @@ interface Props {
   eventSourceRef?: RefObject<HTMLElement>;
   renderBatchSize?: number;
   onRenderItems?(info: { items: unknown[]; startIndex: number }): void;
+  onScrollStop?(offset: number): void;
   style?: CSSProperties;
   className?: string;
   children(item: unknown, index: number): ReactNode;
@@ -60,6 +61,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       eventSourceRef,
       renderBatchSize = 5,
       onRenderItems,
+      onScrollStop,
       style,
       className,
       children,
@@ -70,8 +72,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const rootElmntRef = createRef<HTMLDivElement>();
     const itemsElmntRef = createRef<HTMLDivElement>();
     const renderWindowRef = useRef({ from: 0, to: 0 });
-    const offsetRef = useRef(0);
+    const offsetRef = useRef(-1);
     const rafPidRef = useRef(0);
+    const scrollPidRef = useRef<NodeJS.Timeout>();
     const [, setRenderFlag] = useState(false); // this is to trigger a render
 
     const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
@@ -82,8 +85,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     const setOffset = useCallback(
       (itemsElmnt: HTMLDivElement | null, offset: number) => {
-        offsetRef.current = offset;
-        if (itemsElmnt) {
+        if (itemsElmnt && offsetRef.current !== offset) {
+          offsetRef.current = offset;
           const height = heightRef.current;
           const renderWindow = renderWindowRef.current;
           let { from, to } = renderWindow;
@@ -129,6 +132,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               setRenderFlag(rf => !rf);
             }
           });
+          return true;
+        } else {
+          return false;
         }
       },
       [itemOffsets],
@@ -193,10 +199,19 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           return;
         }
 
-        setOffset(
-          itemsElmnt,
-          Math.min(maxOffset, Math.max(0, offsetRef.current + deltaY * scrollSpeed)),
-        );
+        const offset = Math.min(maxOffset, Math.max(0, offsetRef.current + deltaY * scrollSpeed));
+
+        if (setOffset(itemsElmnt, offset)) {
+          if (onScrollStop) {
+            if (scrollPidRef.current) {
+              clearTimeout(scrollPidRef.current);
+              scrollPidRef.current = undefined;
+            }
+            scrollPidRef.current = setTimeout(() => {
+              onScrollStop(offsetRef.current);
+            }, 200);
+          }
+        }
       };
 
       const onWheel = (event: WheelEvent) => {
