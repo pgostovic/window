@@ -28,21 +28,21 @@
     "react": "^16.13.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.3",
+    "@babel/core": "^7.13.8",
     "@storybook/preset-typescript": "^2.1.0",
-    "@storybook/react": "^5.3.21",
+    "@storybook/react": "^6.1.20",
     "@types/faker": "^4.1.12",
-    "@types/node": "^13.13.30",
-    "@types/react-dom": "^16.9.9",
+    "@types/node": "^13.13.45",
+    "@types/react-dom": "^16.9.11",
     "@types/react-window": "^1.8.2",
     "@types/rollup-plugin-peer-deps-external": "^2.2.0",
     "@typescript-eslint/eslint-plugin": "^2.34.0",
     "@typescript-eslint/parser": "^2.34.0",
-    "babel-loader": "^8.1.0",
+    "babel-loader": "^8.2.2",
     "eslint": "^6.8.0",
     "eslint-config-prettier": "^6.15.0",
-    "eslint-plugin-prettier": "^3.1.4",
-    "eslint-plugin-react": "^7.21.5",
+    "eslint-plugin-prettier": "^3.3.1",
+    "eslint-plugin-react": "^7.22.0",
     "eslint-plugin-simple-import-sort": "^5.0.3",
     "faker": "^4.1.0",
     "fork-ts-checker-webpack-plugin": "^4.1.6",
@@ -50,14 +50,16 @@
     "react-dom": "^16.14.0",
     "react-window": "^1.8.6",
     "rimraf": "^3.0.2",
-    "rollup": "^2.32.1",
+    "rollup": "^2.40.0",
     "rollup-plugin-commonjs": "^10.1.0",
     "rollup-plugin-node-resolve": "^5.2.0",
     "rollup-plugin-peer-deps-external": "^2.2.4",
     "rollup-plugin-typescript2": "^0.27.3",
     "ts-loader": "^6.2.2",
     "ts-node": "^8.10.2",
-    "typescript": "^3.9.7"
+    "typescript": "^3.9.9"
   },
-  "dependencies": {}
+  "dependencies": {
+    "react": "^16.14.0"
+  }
 }
