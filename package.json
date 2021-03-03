@@ -24,9 +24,6 @@
     "url": "https://github.com/pgostovic/window/issues"
   },
   "homepage": "https://github.com/pgostovic/window#readme",
-  "peerDependencies": {
-    "react": "^16.13.1"
-  },
   "devDependencies": {
     "@babel/core": "^7.13.8",
     "@storybook/preset-typescript": "^2.1.0",
@@ -47,6 +44,7 @@
     "faker": "^4.1.0",
     "fork-ts-checker-webpack-plugin": "^4.1.6",
     "prettier": "^1.19.1",
+    "react": "^16.14.0",
     "react-dom": "^16.14.0",
     "react-window": "^1.8.6",
     "rimraf": "^3.0.2",
@@ -59,7 +57,7 @@
     "ts-node": "^8.10.2",
     "typescript": "^3.9.9"
   },
-  "dependencies": {
-    "react": "^16.14.0"
+  "peerDependencies": {
+    "react": "^16.8.0"
   }
 }
