@@ -27,8 +27,8 @@ export const ItemSizes: FC = () => {
       <Scroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
-        items={numbers}
-        itemSize={index => sizes[index]}
+        rows={numbers}
+        rowSize={index => sizes[index]}
         initOffset={offset}
       >
         {(num: number, i) => (

@@ -20,7 +20,7 @@ export const ScrollSpeed: FC = () => {
       ))}
       <Scroller
         style={{ height: '500px', width: '200px', marginTop: '10px' }}
-        items={numbers}
+        rows={numbers}
         scrollSpeed={speed}
       >
         {(num: number) => (

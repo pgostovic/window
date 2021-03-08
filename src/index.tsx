@@ -15,28 +15,28 @@ import React, {
 } from 'react';
 
 const DEFAULT_SCROLL_SPEED = 1;
-const DEFAULT_ITEM_SIZE = 40;
+const DEFAULT_ROW_SIZE = 40;
 
 type ItemSize = number | ((index: number) => number);
 
 interface Props {
-  items: unknown[];
-  itemSize?: ItemSize;
+  rows: unknown[];
+  rowSize?: ItemSize;
   initScroll?: { index: number; position?: number };
   initOffset?: number;
   scrollSpeed?: number;
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   renderBatchSize?: number;
-  onRenderItems?(info: { items: unknown[]; startIndex: number }): void;
+  onRenderRows?(info: { rows: unknown[]; startIndex: number }): void;
   onScrollStop?(offset: number): void;
   style?: CSSProperties;
   className?: string;
-  children(item: unknown, index: number): ReactNode;
+  children(row: unknown, index: number): ReactNode;
 }
 
 export interface ScrollerRef {
-  scrollToItem(item: unknown, position?: number): void;
+  scrollToRow(row: unknown, position?: number): void;
   scrollToIndex(index: number, position?: number): void;
   getOffset(): number;
   setOffset(offset: number): void;
@@ -52,15 +52,15 @@ interface TouchInfo {
 export const Scroller = forwardRef<ScrollerRef, Props>(
   (
     {
-      items,
-      itemSize = DEFAULT_ITEM_SIZE,
+      rows,
+      rowSize = DEFAULT_ROW_SIZE,
       initScroll = { index: 0, position: 0 },
       scrollSpeed = DEFAULT_SCROLL_SPEED,
       initOffset,
       eventSource,
       eventSourceRef,
       renderBatchSize = 5,
-      onRenderItems,
+      onRenderRows,
       onScrollStop,
       style,
       className,
@@ -70,7 +70,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
   ) => {
     const ref = r as MutableRefObject<ScrollerRef> | undefined;
     const rootElmntRef = createRef<HTMLDivElement>();
-    const itemsElmntRef = createRef<HTMLDivElement>();
+    const rowsElmntRef = createRef<HTMLDivElement>();
     const renderWindowRef = useRef({ from: 0, to: 0 });
     const offsetRef = useRef(-1);
     const rafPidRef = useRef(0);
@@ -80,24 +80,24 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const touchInfoRef = useRef<TouchInfo>({ t: 0, y: 0, dy: 0 });
     const heightRef = useRef(0);
 
-    const itemSizes = useMemo(() => calculateSizes(itemSize, items.length), [items, itemSize]);
-    const itemOffsets = useMemo(() => calculateOffsets(itemSizes), [itemSizes]);
+    const rowSizes = useMemo(() => calculateSizes(rowSize, rows.length), [rows, rowSize]);
+    const rowOffsets = useMemo(() => calculateOffsets(rowSizes), [rowSizes]);
 
     const setOffset = useCallback(
-      (itemsElmnt: HTMLDivElement | null, offset: number) => {
-        if (itemsElmnt && offsetRef.current !== offset) {
+      (rowsElmnt: HTMLDivElement | null, offset: number) => {
+        if (rowsElmnt && offsetRef.current !== offset) {
           offsetRef.current = offset;
           const height = heightRef.current;
           const renderWindow = renderWindowRef.current;
           let { from, to } = renderWindow;
 
-          let visibleFrom = itemOffsets.findIndex(itemOffset => itemOffset >= offset);
-          while (itemOffsets[visibleFrom] > offset) {
+          let visibleFrom = rowOffsets.findIndex(rowOffset => rowOffset >= offset);
+          while (rowOffsets[visibleFrom] > offset) {
             visibleFrom -= 1;
           }
-          let visibleTo = itemOffsets.findIndex(itemOffset => itemOffset >= offset + height);
+          let visibleTo = rowOffsets.findIndex(rowOffset => rowOffset >= offset + height);
           if (visibleTo === -1) {
-            visibleTo = items.length;
+            visibleTo = rows.length;
           }
 
           if (visibleFrom < from) {
@@ -111,7 +111,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           }
 
           from = Math.max(from, 0);
-          to = Math.min(to, itemOffsets.length);
+          to = Math.min(to, rowOffsets.length);
 
           if (rafPidRef.current !== 0) {
             cancelAnimationFrame(rafPidRef.current);
@@ -119,14 +119,14 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           rafPidRef.current = requestAnimationFrame(() => {
             rafPidRef.current = 0;
 
-            // set items container translate transform
-            const translateY = -offset + (itemOffsets[from] || 0);
+            // set rows container translate transform
+            const translateY = -offset + (rowOffsets[from] || 0);
             if (translateY > 0) {
               console.log('Problem', translateY, visibleFrom, visibleTo);
             }
-            itemsElmnt.style.transform = `translateY(${translateY}px)`;
+            rowsElmnt.style.transform = `translateY(${translateY}px)`;
 
-            // render items if needed
+            // render rows if needed
             if (from !== renderWindow.from || to !== renderWindow.to) {
               renderWindowRef.current = { from, to };
               setRenderFlag(rf => !rf);
@@ -137,29 +137,29 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           return false;
         }
       },
-      [itemOffsets],
+      [rowOffsets],
     );
 
-    const lastIndex = items.length - 1;
-    const totalSize = lastIndex === -1 ? 0 : itemOffsets[lastIndex] + itemSizes[lastIndex];
+    const lastIndex = rows.length - 1;
+    const totalSize = lastIndex === -1 ? 0 : rowOffsets[lastIndex] + rowSizes[lastIndex];
     const maxOffset = totalSize - heightRef.current;
 
     if (ref) {
       ref.current = {
-        scrollToItem(item: undefined, position = 0) {
-          this.scrollToIndex(items.indexOf(item), position);
+        scrollToRow(row: undefined, position = 0) {
+          this.scrollToIndex(rows.indexOf(row), position);
         },
         scrollToIndex(index: number, position = 0) {
           const height = heightRef.current;
-          const itemSize = itemSizes[index] || 0;
-          const itemOffset = Math.min(maxOffset, Math.max(0, itemOffsets[index]));
-          setOffset(itemsElmntRef.current, itemOffset - (height - itemSize) * position);
+          const rowSize = rowSizes[index] || 0;
+          const rowOffset = Math.min(maxOffset, Math.max(0, rowOffsets[index]));
+          setOffset(rowsElmntRef.current, rowOffset - (height - rowSize) * position);
         },
         getOffset() {
           return offsetRef.current;
         },
         setOffset(offset: number) {
-          setOffset(itemsElmntRef.current, offset);
+          setOffset(rowsElmntRef.current, offset);
         },
       };
     }
@@ -171,16 +171,16 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     }, []);
 
     useEffect(() => {
-      if (itemsElmntRef.current) {
+      if (rowsElmntRef.current) {
         if (initOffset !== undefined) {
-          setOffset(itemsElmntRef.current, initOffset);
+          setOffset(rowsElmntRef.current, initOffset);
         } else {
           const height = heightRef.current;
-          const itemSize = itemSizes[initScroll.index] || 0;
-          const itemOffset = Math.min(maxOffset, Math.max(0, itemOffsets[initScroll.index]));
+          const rowSize = rowSizes[initScroll.index] || 0;
+          const rowOffset = Math.min(maxOffset, Math.max(0, rowOffsets[initScroll.index]));
           setOffset(
-            itemsElmntRef.current,
-            itemOffset - (height - itemSize) * (initScroll.position || 0),
+            rowsElmntRef.current,
+            rowOffset - (height - rowSize) * (initScroll.position || 0),
           );
         }
       }
@@ -191,17 +191,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         | HTMLElement
         | undefined;
 
-      const itemsElmnt = itemsElmntRef.current;
+      const rowsElmnt = rowsElmntRef.current;
 
       const scroll = (deltaY: number) => {
-        // Don't allow scrolling if items don't fill the scroll window.
+        // Don't allow scrolling if rows don't fill the scroll window.
         if (totalSize < heightRef.current) {
           return;
         }
 
         const offset = Math.min(maxOffset, Math.max(0, offsetRef.current + deltaY * scrollSpeed));
 
-        if (setOffset(itemsElmnt, offset)) {
+        if (setOffset(rowsElmnt, offset)) {
           if (onScrollStop) {
             if (scrollPidRef.current) {
               clearTimeout(scrollPidRef.current);
@@ -276,29 +276,29 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     const renderWindow = renderWindowRef.current;
     const isHeightLimited = heightRef.current > 0;
-    const sizes = isHeightLimited ? itemSizes.slice(renderWindow.from, renderWindow.to) : itemSizes;
-    const renderedItems = isHeightLimited ? items.slice(renderWindow.from, renderWindow.to) : items;
+    const sizes = isHeightLimited ? rowSizes.slice(renderWindow.from, renderWindow.to) : rowSizes;
+    const renderedRows = isHeightLimited ? rows.slice(renderWindow.from, renderWindow.to) : rows;
 
     useEffect(() => {
-      if (onRenderItems && renderedItems.length > 0) {
-        onRenderItems({ items: renderedItems, startIndex: renderWindow.from });
+      if (onRenderRows && renderedRows.length > 0) {
+        onRenderRows({ rows: renderedRows, startIndex: renderWindow.from });
       }
-    }, [renderedItems]);
+    }, [renderedRows]);
 
-    const renderedItemsElements = renderedItems.map((item, i) => {
-      const itemIndex = i + renderWindow.from;
-      const renderedItem = children(item, itemIndex) as ReactElement;
-      const { style, key } = renderedItem.props;
-      return cloneElement(renderedItem, {
-        key: key || itemIndex,
+    const renderedRowsElements = renderedRows.map((row, i) => {
+      const rowIndex = i + renderWindow.from;
+      const renderedRow = children(row, rowIndex) as ReactElement;
+      const { style, key } = renderedRow.props;
+      return cloneElement(renderedRow, {
+        key: key || rowIndex,
         style: { ...style, height: sizes[i], boxSizing: 'border-box' },
       });
     });
 
     return (
       <div ref={rootElmntRef} style={{ ...style, overflow: 'hidden' }} className={className}>
-        <div ref={itemsElmntRef} style={{ willChange: 'transform' }}>
-          {renderedItemsElements}
+        <div ref={rowsElmntRef} style={{ willChange: 'transform' }}>
+          {renderedRowsElements}
         </div>
       </div>
     );

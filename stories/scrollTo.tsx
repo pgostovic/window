@@ -31,7 +31,7 @@ export const ScrollToIndex: FC = () => {
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
         initScroll={{ index: 50 }}
-        items={people}
+        rows={people}
       >
         {(person: Person, i) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
@@ -49,10 +49,10 @@ export const ScrollToItem: FC = () => {
 
   return (
     <div>
-      <button disabled={!mark} onClick={() => windowRef.current.scrollToItem(mark)}>
+      <button disabled={!mark} onClick={() => windowRef.current.scrollToRow(mark)}>
         Scroll to {mark ? mark.firstName : 'N/A'}
       </button>
-      <Scroller ref={windowRef} style={{ height: '500px' }} items={people}>
+      <Scroller ref={windowRef} style={{ height: '500px' }} rows={people}>
         {(person: Person) => (
           <div
             style={{

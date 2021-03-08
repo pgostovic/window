@@ -10,7 +10,7 @@ for (let i = 0; i < 1000; i++) {
 export const EventSource: FC = () => (
   <>
     Scroll with the cursor anywhere in the frame.
-    <Scroller eventSource={window} style={{ height: '500px', width: '200px' }} items={numbers}>
+    <Scroller eventSource={window} style={{ height: '500px', width: '200px' }} rows={numbers}>
       {(num: number) => (
         <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
           {num}
@@ -25,11 +25,7 @@ export const EventSourceRef: FC = () => {
   return (
     <div ref={rootRef} style={{ height: '700px', width: '400px', backgroundColor: '#eee' }}>
       Scroll with the cursor anywhere in the shaded region.
-      <Scroller
-        eventSourceRef={rootRef}
-        style={{ height: '500px', width: '200px' }}
-        items={numbers}
-      >
+      <Scroller eventSourceRef={rootRef} style={{ height: '500px', width: '200px' }} rows={numbers}>
         {(num: number) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             {num}

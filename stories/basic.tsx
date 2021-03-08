@@ -12,7 +12,7 @@ export const Basic: FC = () => (
   <div style={{ display: 'flex', flexDirection: 'row' }}>
     <div>
       @phnq/window
-      <Scroller style={{ height: '500px', width: '200px' }} items={numbers} renderBatchSize={10}>
+      <Scroller style={{ height: '500px', width: '200px' }} rows={numbers} renderBatchSize={10}>
         {(num: number) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             {num}
