@@ -275,9 +275,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     }, [totalSize, maxOffset, scrollSpeed]);
 
     const renderWindow = renderWindowRef.current;
-    const heightLimit = heightRef.current > 0;
-    const sizes = heightLimit ? itemSizes.slice(renderWindow.from, renderWindow.to) : itemSizes;
-    const renderedItems = heightLimit ? items.slice(renderWindow.from, renderWindow.to) : items;
+    const isHeightLimited = heightRef.current > 0;
+    const sizes = isHeightLimited ? itemSizes.slice(renderWindow.from, renderWindow.to) : itemSizes;
+    const renderedItems = isHeightLimited ? items.slice(renderWindow.from, renderWindow.to) : items;
 
     useEffect(() => {
       if (onRenderItems && renderedItems.length > 0) {
