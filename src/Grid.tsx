@@ -62,19 +62,29 @@ const Grid: FC<Props> = ({
   const rootElmntRef = createRef<HTMLDivElement>();
   const rowsElmntRef = createRef<HTMLDivElement>();
   const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
-  const offsetRef = useRef({ x: -1, y: -1 });
+  const offsetRef = useRef(initOffset);
   const rafPidRef = useRef(0);
   const scrollPidRef = useRef<NodeJS.Timeout>();
   const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
-  const windoSizeRef = useRef({ width: 0, height: 0 });
+  const windowSizeRef = useRef({ width: 0, height: 0 });
   const [, setRenderFlag] = useState(false); // this is to trigger a render
+
+  const resizeObserver = useRef<ResizeObserver>();
 
   const numRows = rows.length;
   const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
-  const rowHeights = useMemo(() => calculateSizes(rowHeight, numRows), [rows, rowHeight]);
+  const rowHeights = useMemo(() => calculateSizes(rowHeight, numRows), [
+    rows,
+    rowHeight,
+    windowSizeRef.current,
+  ]);
   const rowOffsets = useMemo(() => calculateOffsets(rowHeights), [rowHeights]);
-  const colWidths = useMemo(() => calculateSizes(colWidth, numCols), [rows, colWidth]);
+  const colWidths = useMemo(() => calculateSizes(colWidth, numCols), [
+    rows,
+    colWidth,
+    windowSizeRef.current,
+  ]);
   const colOffsets = useMemo(() => calculateOffsets(colWidths), [colWidths]);
 
   const totalSize = {
@@ -82,24 +92,32 @@ const Grid: FC<Props> = ({
     height: numRows === 0 ? 0 : rowOffsets[numRows - 1] + rowHeights[numRows - 1],
   };
   const maxOffset = {
-    x: totalSize.width - windoSizeRef.current.width,
-    y: totalSize.height - windoSizeRef.current.height,
+    x: totalSize.width - windowSizeRef.current.width,
+    y: totalSize.height - windowSizeRef.current.height,
   };
 
   useEffect(() => {
-    if (rootElmntRef.current) {
-      const { width, height } = rootElmntRef.current.getBoundingClientRect();
-      windoSizeRef.current = { width, height };
-      setOffset(rowsElmntRef.current, initOffset);
+    const rootElmnt = rootElmntRef.current;
+    if (rootElmnt) {
+      resizeObserver.current = new ResizeObserver(() => {
+        const { width, height } = rootElmnt.getBoundingClientRect();
+        windowSizeRef.current = { width, height };
+        setOffset(rowsElmntRef.current, offsetRef.current, true);
+      });
+      resizeObserver.current.observe(rootElmnt);
+      return () => resizeObserver.current?.unobserve(rootElmnt);
     }
   }, []);
 
   const setOffset = useCallback(
-    (rowsElmnt: HTMLDivElement | null, offset: { x: number; y: number }) => {
-      if (rowsElmnt && (offsetRef.current.x !== offset.x || offsetRef.current.y !== offset.y)) {
+    (rowsElmnt: HTMLDivElement | null, offset: { x: number; y: number }, force = false) => {
+      if (
+        rowsElmnt &&
+        (force || offsetRef.current.x !== offset.x || offsetRef.current.y !== offset.y)
+      ) {
         offsetRef.current = offset;
-        const width = windoSizeRef.current.width;
-        const height = windoSizeRef.current.height;
+        const width = windowSizeRef.current.width;
+        const height = windowSizeRef.current.height;
         const renderWindow = renderWindowRef.current;
         let { fromRow, toRow, fromCol, toCol } = renderWindow;
 
@@ -202,14 +220,14 @@ const Grid: FC<Props> = ({
     const scroll = (deltaX: number, deltaY: number) => {
       // Don't allow scrolling if grid fits inside the window.
       if (
-        totalSize.width <= windoSizeRef.current.width &&
-        totalSize.height <= windoSizeRef.current.height
+        totalSize.width <= windowSizeRef.current.width &&
+        totalSize.height <= windowSizeRef.current.height
       ) {
         return;
       }
 
-      const effectiveDeltaX = windoSizeRef.current.width === 0 ? 0 : deltaX;
-      const effectiveDeltaY = windoSizeRef.current.height === 0 ? 0 : deltaY;
+      const effectiveDeltaX = windowSizeRef.current.width === 0 ? 0 : deltaX;
+      const effectiveDeltaY = windowSizeRef.current.height === 0 ? 0 : deltaY;
 
       const offset = {
         x: Math.min(maxOffset.x, Math.max(0, offsetRef.current.x + effectiveDeltaX * scrollSpeed)),
@@ -326,11 +344,11 @@ const Grid: FC<Props> = ({
   }
 
   const naturalHeight =
-    windoSizeRef.current.height === 0 && renderWindowRef.current.toRow > 0
+    windowSizeRef.current.height === 0 && renderWindowRef.current.toRow > 0
       ? `${totalSize.height}px`
       : undefined;
   const naturalWidth =
-    windoSizeRef.current.width === 0 && renderWindowRef.current.toCol > 0
+    windowSizeRef.current.width === 0 && renderWindowRef.current.toCol > 0
       ? `${totalSize.width}px`
       : undefined;
 
