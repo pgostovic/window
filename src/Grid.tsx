@@ -15,11 +15,15 @@ import React, {
 } from 'react';
 
 const DEFAULT_ROW_HEIGHT = 40;
-const DEFAULT_COL_WIDTH = 80;
+const DEFAULT_COL_WIDTH = () => ({ flex: 1, min: 80 });
 const DEFAULT_SCROLL_SPEED = 1;
 const DEFAULT_RENDER_BATCH_SIZE = 5;
 
-type ItemSize = number | ((index: number) => number);
+interface FlexSize {
+  flex: number;
+  min: number;
+}
+type ItemSize = number | ((index: number) => number | FlexSize);
 
 interface Props {
   rows: unknown[][] | unknown[];
@@ -86,16 +90,15 @@ const Grid: FC<Props> = ({
   const numRows = rows.length;
   const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
-  const rowHeights = useMemo(() => calculateSizes(rowHeight, numRows), [
-    rows,
-    rowHeight,
-    windowSizeRef.current,
-  ]);
+  const rowHeights = useMemo(
+    () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height),
+    [rows, rowHeight, windowSizeRef.current],
+  );
   const rowOffsets = useMemo(() => calculateOffsets(rowHeights), [rowHeights]);
-  const colWidths = useMemo(() => calculateSizes(colWidth, numCols), [
+  const colWidths = useMemo(() => calculateSizes(colWidth, numCols, windowSizeRef.current.width), [
     rows,
     colWidth,
-    windowSizeRef.current,
+    windowSizeRef.current.width,
   ]);
   const colOffsets = useMemo(() => calculateOffsets(colWidths), [colWidths]);
 
@@ -559,12 +562,31 @@ const CELLS_ELMNT_STYLE: CSSProperties = {
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
-const calculateSizes = (itemSize: ItemSize, count: number): number[] =>
-  typeof itemSize === 'number'
-    ? Array(count).fill(itemSize)
-    : Array(count)
-        .fill(0)
-        .map((_, i) => itemSize(i));
+const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number): number[] => {
+  if (typeof itemSize === 'number') {
+    return Array(count).fill(itemSize);
+  } else {
+    const sizes = Array(count)
+      .fill(0)
+      .map((_, i) => itemSize(i));
+
+    const staticSizes = sizes.filter(s => typeof s === 'number') as number[];
+    if (staticSizes.length === sizes.length) {
+      return staticSizes;
+    }
+
+    const staticSize = staticSizes.reduce((t, s) => t + s, 0);
+    const flexSizes = sizes.filter(s => typeof s === 'object') as FlexSize[];
+    const minSize = staticSize + flexSizes.reduce((t, s) => t + s.min, 0);
+    if (minSize < maxSize) {
+      const remainder = maxSize - staticSize;
+      const remainderPerFlex = remainder / flexSizes.reduce((t, s) => t + s.flex, 0);
+      return sizes.map(s => (typeof s === 'number' ? s : s.flex * remainderPerFlex));
+    } else {
+      return sizes.map(s => (typeof s === 'number' ? s : s.min));
+    }
+  }
+};
 
 const calculateOffsets = (itemSizes: number[]) => {
   const offsets = itemSizes.length === 0 ? [] : [0];
