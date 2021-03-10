@@ -22,7 +22,7 @@ const DEFAULT_RENDER_BATCH_SIZE = 5;
 type ItemSize = number | ((index: number) => number);
 
 interface Props {
-  rows: unknown[][];
+  rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
   colWidth?: ItemSize;
   stickyRows?: number[];
@@ -32,9 +32,11 @@ interface Props {
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   renderBatchSize?: number;
+  onRenderRows?(info: { rows: unknown[]; fromRow: number; fromCol: number }): void;
   onScrollStop?(offset: { x: number; y: number }): void;
   style?: CSSProperties;
   className?: string;
+  stickyClassName?: string;
   children?(cell: unknown, row: number, col: number): ReactNode;
 }
 
@@ -48,7 +50,7 @@ interface TouchInfo {
 }
 
 const Grid: FC<Props> = ({
-  rows,
+  rows: rowsRaw,
   rowHeight = DEFAULT_ROW_HEIGHT,
   colWidth = DEFAULT_COL_WIDTH,
   stickyRows = [],
@@ -58,11 +60,14 @@ const Grid: FC<Props> = ({
   eventSource,
   eventSourceRef,
   renderBatchSize = DEFAULT_RENDER_BATCH_SIZE,
+  onRenderRows,
   onScrollStop,
   style,
   className,
+  stickyClassName,
   children = cell => cell as ReactNode,
 }) => {
+  const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
   const rootElmntRef = createRef<HTMLDivElement>();
   const cellsElmntRef = createRef<HTMLDivElement>();
   const stickyRowsElmntRef = createRef<HTMLDivElement>();
@@ -74,9 +79,9 @@ const Grid: FC<Props> = ({
   const scrollPidRef = useRef<NodeJS.Timeout>();
   const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
   const windowSizeRef = useRef({ width: 0, height: 0 });
-  const [, setRenderFlag] = useState(false); // this is to trigger a render
   const stuckRowsRef = useRef<number[]>([]);
   const stuckColsRef = useRef<number[]>([]);
+  const [, setRenderFlag] = useState(false);
 
   const numRows = rows.length;
   const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
@@ -110,6 +115,7 @@ const Grid: FC<Props> = ({
   const stickyColOffsets = calculateOffsets(sortedStickyCols.map(c => colWidths[c]));
 
   useEffect(() => {
+    reflow();
     const rootElmnt = rootElmntRef.current;
     if (rootElmnt) {
       const resizeObserver = new ResizeObserver(() => {
@@ -158,6 +164,7 @@ const Grid: FC<Props> = ({
           row: rowOffsets.findIndex(rowOffset => rowOffset >= offset.y),
           col: colOffsets.findIndex(colOffset => colOffset >= offset.x),
         };
+
         while (rowOffsets[visibleFrom.row] > offset.y) {
           visibleFrom.row -= 1;
         }
@@ -220,15 +227,10 @@ const Grid: FC<Props> = ({
         rafPidRef.current = requestAnimationFrame(() => {
           rafPidRef.current = 0;
 
-          // set rows container translate transform
-          const translateY = -offset.y + (rowOffsets[fromRow] || 0);
-          if (translateY > 0) {
-            console.log('ProblemY', translateY, visibleFrom.row, visibleTo.row);
-          }
-          const translateX = -offset.x + (colOffsets[fromCol] || 0);
-          if (translateX > 0) {
-            console.log('ProblemX', translateX, visibleFrom.col, visibleTo.col);
-          }
+          // Set rows container translate transform. Both translateY and translateX must be
+          // negative to ensure content begins in the top left corner.
+          const translateY = Math.min(0, -offset.y + (rowOffsets[fromRow] || 0));
+          const translateX = Math.min(0, -offset.x + (colOffsets[fromCol] || 0));
 
           const stuckRowsHeight = stuckRows.reduce((h, r) => h + rowHeights[r], 0);
           const stuckColsWidth = stuckCols.reduce((w, c) => w + colWidths[c], 0);
@@ -370,6 +372,16 @@ const Grid: FC<Props> = ({
 
   const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 
+  useEffect(() => {
+    if (onRenderRows) {
+      onRenderRows({
+        rows: rows.slice(fromRow, toRow).map(cols => cols.slice(fromCol, toCol)),
+        fromRow,
+        fromCol,
+      });
+    }
+  }, [onRenderRows, fromRow, toRow, fromCol, toCol]);
+
   const makeRenderedCell = (
     r: number,
     c: number,
@@ -478,7 +490,6 @@ const Grid: FC<Props> = ({
         width: naturalWidth,
         height: naturalHeight,
         ...style,
-        overflow: 'hidden',
         position: 'relative',
       }}
       className={className}
@@ -499,6 +510,7 @@ const Grid: FC<Props> = ({
       </div>
 
       <div
+        className={[stickyClassName, 'stickyRows'].filter(Boolean).join(' ')}
         style={{
           position: 'absolute',
           top: 0,
@@ -514,6 +526,7 @@ const Grid: FC<Props> = ({
       </div>
 
       <div
+        className={[stickyClassName, 'stickyCols'].filter(Boolean).join(' ')}
         style={{
           position: 'absolute',
           top: px(stuckRowsHeight),
@@ -528,7 +541,9 @@ const Grid: FC<Props> = ({
         </div>
       </div>
 
-      <div style={CELLS_ELMNT_STYLE}>{stuckCells}</div>
+      <div className={stickyClassName} style={CELLS_ELMNT_STYLE}>
+        {stuckCells}
+      </div>
     </div>
   );
 };
@@ -589,5 +604,8 @@ const same = (nums1: number[], nums2: number[]) => {
   }
   return false;
 };
+
+const to2d = (rows: unknown[][] | unknown[]): unknown[][] =>
+  rows.map((row: unknown[] | unknown) => (row instanceof Array ? row : [row]));
 
 export default Grid;
