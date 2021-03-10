@@ -25,6 +25,8 @@ interface Props {
   rows: unknown[][];
   rowHeight?: ItemSize;
   colWidth?: ItemSize;
+  stickyRows?: number[];
+  stickyCols?: number[];
   initOffset?: { x: number; y: number };
   scrollSpeed?: number;
   eventSource?: HTMLElement | (Window & typeof globalThis);
@@ -33,7 +35,7 @@ interface Props {
   onScrollStop?(offset: { x: number; y: number }): void;
   style?: CSSProperties;
   className?: string;
-  children(cell: unknown, row: number, col: number): ReactNode;
+  children?(cell: unknown, row: number, col: number): ReactNode;
 }
 
 interface TouchInfo {
@@ -49,6 +51,8 @@ const Grid: FC<Props> = ({
   rows,
   rowHeight = DEFAULT_ROW_HEIGHT,
   colWidth = DEFAULT_COL_WIDTH,
+  stickyRows = [],
+  stickyCols = [],
   initOffset = { x: 0, y: 0 },
   scrollSpeed = DEFAULT_SCROLL_SPEED,
   eventSource,
@@ -57,19 +61,22 @@ const Grid: FC<Props> = ({
   onScrollStop,
   style,
   className,
-  children,
+  children = cell => cell as ReactNode,
 }) => {
   const rootElmntRef = createRef<HTMLDivElement>();
-  const rowsElmntRef = createRef<HTMLDivElement>();
+  const cellsElmntRef = createRef<HTMLDivElement>();
+  const stickyRowsElmntRef = createRef<HTMLDivElement>();
+  const stickyColsElmntRef = createRef<HTMLDivElement>();
   const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
+  const rowsTranslateRef = useRef({ x: 0, y: 0 });
   const offsetRef = useRef(initOffset);
   const rafPidRef = useRef(0);
   const scrollPidRef = useRef<NodeJS.Timeout>();
   const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
   const windowSizeRef = useRef({ width: 0, height: 0 });
   const [, setRenderFlag] = useState(false); // this is to trigger a render
-
-  const resizeObserver = useRef<ResizeObserver>();
+  const stuckRowsRef = useRef<number[]>([]);
+  const stuckColsRef = useRef<number[]>([]);
 
   const numRows = rows.length;
   const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
@@ -96,23 +103,49 @@ const Grid: FC<Props> = ({
     y: totalSize.height - windowSizeRef.current.height,
   };
 
+  const sortedStickyRows = [...stickyRows].sort((a, b) => a - b);
+  const stickyRowOffsets = calculateOffsets(sortedStickyRows.map(r => rowHeights[r]));
+
+  const sortedStickyCols = [...stickyCols].sort((a, b) => a - b);
+  const stickyColOffsets = calculateOffsets(sortedStickyCols.map(c => colWidths[c]));
+
   useEffect(() => {
     const rootElmnt = rootElmntRef.current;
     if (rootElmnt) {
-      resizeObserver.current = new ResizeObserver(() => {
-        const { width, height } = rootElmnt.getBoundingClientRect();
-        windowSizeRef.current = { width, height };
-        setOffset(rowsElmntRef.current, offsetRef.current, true);
+      const resizeObserver = new ResizeObserver(() => {
+        reflow();
       });
-      resizeObserver.current.observe(rootElmnt);
-      return () => resizeObserver.current?.unobserve(rootElmnt);
+      resizeObserver.observe(rootElmnt);
+      return () => resizeObserver.unobserve(rootElmnt);
     }
   }, []);
 
+  const reflow = () => {
+    if (rootElmntRef.current && cellsElmntRef.current) {
+      const { width, height } = rootElmntRef.current.getBoundingClientRect();
+      windowSizeRef.current = { width, height };
+      setOffset(
+        cellsElmntRef.current,
+        stickyRowsElmntRef.current,
+        stickyColsElmntRef.current,
+        offsetRef.current,
+        true,
+      );
+    }
+  };
+
   const setOffset = useCallback(
-    (rowsElmnt: HTMLDivElement | null, offset: { x: number; y: number }, force = false) => {
+    (
+      cellsElmnt: HTMLDivElement | null,
+      stickyRowsElmnt: HTMLDivElement | null,
+      stickyColsElmnt: HTMLDivElement | null,
+      offset: { x: number; y: number },
+      force = false,
+    ) => {
       if (
-        rowsElmnt &&
+        cellsElmnt &&
+        stickyRowsElmnt &&
+        stickyColsElmnt &&
         (force || offsetRef.current.x !== offset.x || offsetRef.current.y !== offset.y)
       ) {
         offsetRef.current = offset;
@@ -174,6 +207,13 @@ const Grid: FC<Props> = ({
         fromCol = Math.max(fromCol, 0);
         toCol = Math.min(toCol, colOffsets.length);
 
+        const stuckRows = sortedStickyRows.filter(
+          (r, i) => rowOffsets[r] - stickyRowOffsets[i] < offsetRef.current.y,
+        );
+        const stuckCols = sortedStickyCols.filter(
+          (c, i) => colOffsets[c] - stickyColOffsets[i] < offsetRef.current.x,
+        );
+
         if (rafPidRef.current !== 0) {
           cancelAnimationFrame(rafPidRef.current);
         }
@@ -189,16 +229,29 @@ const Grid: FC<Props> = ({
           if (translateX > 0) {
             console.log('ProblemX', translateX, visibleFrom.col, visibleTo.col);
           }
-          rowsElmnt.style.transform = `translate(${translateX}px, ${translateY}px)`;
+
+          const stuckRowsHeight = stuckRows.reduce((h, r) => h + rowHeights[r], 0);
+          const stuckColsWidth = stuckCols.reduce((w, c) => w + colWidths[c], 0);
+
+          cellsElmnt.style.transform = `translate(${translateX - stuckColsWidth}px, ${translateY -
+            stuckRowsHeight}px)`;
+          stickyRowsElmnt.style.transform = `translateX(${translateX - stuckColsWidth}px)`;
+          stickyColsElmnt.style.transform = `translateY(${translateY - stuckRowsHeight}px)`;
+
+          rowsTranslateRef.current = { x: translateX, y: translateY };
 
           // render rows if needed
           if (
             fromRow !== renderWindow.fromRow ||
             toRow !== renderWindow.toRow ||
             fromCol !== renderWindow.fromCol ||
-            toCol !== renderWindow.toCol
+            toCol !== renderWindow.toCol ||
+            !same(stuckRows, stuckRowsRef.current) ||
+            !same(stuckCols, stuckColsRef.current)
           ) {
             renderWindowRef.current = { fromRow, toRow, fromCol, toCol };
+            stuckRowsRef.current = stuckRows;
+            stuckColsRef.current = stuckCols;
             setRenderFlag(rf => !rf);
           }
         });
@@ -207,7 +260,7 @@ const Grid: FC<Props> = ({
         return false;
       }
     },
-    [rowOffsets, colOffsets, numRows, numCols],
+    [rowOffsets, colOffsets, numRows, numCols, sortedStickyRows.join(), sortedStickyCols.join()],
   );
 
   useEffect(() => {
@@ -215,7 +268,9 @@ const Grid: FC<Props> = ({
       | HTMLElement
       | undefined;
 
-    const rowsElmnt = rowsElmntRef.current;
+    const cellsElmnt = cellsElmntRef.current;
+    const stickyRowsElmnt = stickyRowsElmntRef.current;
+    const stickyColsElmnt = stickyColsElmntRef.current;
 
     const scroll = (deltaX: number, deltaY: number) => {
       // Don't allow scrolling if grid fits inside the window.
@@ -234,7 +289,7 @@ const Grid: FC<Props> = ({
         y: Math.min(maxOffset.y, Math.max(0, offsetRef.current.y + effectiveDeltaY * scrollSpeed)),
       };
 
-      if (setOffset(rowsElmnt, offset)) {
+      if (setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offset)) {
         if (onScrollStop) {
           if (scrollPidRef.current) {
             clearTimeout(scrollPidRef.current);
@@ -313,73 +368,181 @@ const Grid: FC<Props> = ({
     };
   }, [totalSize.width, totalSize.height, maxOffset.x, maxOffset.y, scrollSpeed]);
 
-  const renderedCells: ReactElement[] = [];
   const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
+
+  const makeRenderedCell = (
+    r: number,
+    c: number,
+    top = px(rowOffsets[r] - rowOffsets[fromRow]),
+    left = px(colOffsets[c] - colOffsets[fromCol]),
+  ) => {
+    const renderedCell = children(rows[r][c], r, c);
+    if (renderedCell) {
+      const renderedCellElement = isValidElement(renderedCell) ? (
+        renderedCell
+      ) : (
+        <div>{renderedCell}</div>
+      );
+      const { style, key } = renderedCellElement.props;
+
+      return cloneElement(renderedCellElement, {
+        key: key || `${r}-${c}`,
+        style: {
+          ...style,
+          boxSizing: 'border-box',
+          position: 'absolute',
+          width: px(colWidths[c]),
+          height: px(rowHeights[r]),
+          top,
+          left,
+        },
+      });
+    }
+    return undefined;
+  };
+
+  const stuckRows = stuckRowsRef.current;
+  const stuckCols = stuckColsRef.current;
+  const stuckRowsHeight = stuckRows.reduce((h, r) => h + rowHeights[r], 0);
+  const stuckColsWidth = stuckCols.reduce((w, c) => w + colWidths[c], 0);
+
+  const renderedCells: ReactElement[] = [];
   for (let r = fromRow; r < toRow; r += 1) {
-    for (let c = fromCol; c < toCol; c += 1) {
-      const renderedCell = children(rows[r][c], r, c);
-      if (renderedCell) {
-        const renderedCellElement = isValidElement(renderedCell) ? (
-          renderedCell
-        ) : (
-          <div>{renderedCell}</div>
-        );
-        const { style, key } = renderedCellElement.props;
-        renderedCells.push(
-          cloneElement(renderedCellElement, {
-            key: key || `${r}-${c}`,
-            style: {
-              ...style,
-              boxSizing: 'border-box',
-              position: 'absolute',
-              width: px(colWidths[c]),
-              height: px(rowHeights[r]),
-              top: px(rowOffsets[r] - rowOffsets[fromRow]),
-              left: px(colOffsets[c] - colOffsets[fromCol]),
-            },
-          }),
-        );
+    if (!stuckRows.includes(r)) {
+      for (let c = fromCol; c < toCol; c += 1) {
+        if (!stuckCols.includes(c)) {
+          const cell = makeRenderedCell(r, c);
+          if (cell) {
+            renderedCells.push(cell);
+          }
+        }
       }
     }
   }
 
+  const stuckRowCells: ReactElement[] = [];
+  let stuckRowTop = 0;
+  stuckRows.forEach(r => {
+    for (let c = fromCol; c < toCol; c += 1) {
+      if (!stuckCols.includes(c)) {
+        const cell = makeRenderedCell(r, c, stuckRowTop);
+        if (cell) {
+          stuckRowCells.push(cell);
+        }
+      }
+    }
+    stuckRowTop += rowHeights[r];
+  });
+
+  const stuckColCells: ReactElement[] = [];
+  let stuckColLeft = 0;
+  stuckCols.forEach(c => {
+    for (let r = fromRow; r < toRow; r += 1) {
+      if (!stuckRows.includes(r)) {
+        const cell = makeRenderedCell(r, c, undefined, stuckColLeft);
+        if (cell) {
+          stuckColCells.push(cell);
+        }
+      }
+    }
+    stuckColLeft += colWidths[c];
+  });
+
+  const stuckCells: ReactElement[] = [];
+  stuckRowTop = 0;
+  stuckRows.forEach(r => {
+    stuckColLeft = 0;
+    stuckCols.forEach(c => {
+      const cell = makeRenderedCell(r, c, stuckRowTop, stuckColLeft);
+      if (cell) {
+        stuckCells.push(cell);
+      }
+      stuckColLeft += colWidths[c];
+    });
+    stuckRowTop += rowHeights[r];
+  });
+
   const naturalHeight =
     windowSizeRef.current.height === 0 && renderWindowRef.current.toRow > 0
-      ? `${totalSize.height}px`
+      ? px(totalSize.height)
       : undefined;
   const naturalWidth =
     windowSizeRef.current.width === 0 && renderWindowRef.current.toCol > 0
-      ? `${totalSize.width}px`
+      ? px(totalSize.width)
       : undefined;
-
-  const renderHeight =
-    rowOffsets[renderWindowRef.current.toRow] - rowOffsets[renderWindowRef.current.fromRow];
-  const renderWidth =
-    colOffsets[renderWindowRef.current.toCol] - colOffsets[renderWindowRef.current.fromCol];
 
   return (
     <div
       ref={rootElmntRef}
-      style={{ width: naturalWidth, height: naturalHeight, ...style, overflow: 'hidden' }}
+      style={{
+        width: naturalWidth,
+        height: naturalHeight,
+        ...style,
+        overflow: 'hidden',
+        position: 'relative',
+      }}
       className={className}
     >
       <div
-        ref={rowsElmntRef}
         style={{
-          willChange: 'transform',
-          position: 'relative',
-          width: `${renderWidth}px`,
-          height: `${renderHeight}px`,
-          overflow: 'auto',
+          position: 'absolute',
+          top: px(stuckRowsHeight),
+          left: px(stuckColsWidth),
+          width: stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`,
+          height: stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`,
+          overflow: 'hidden',
         }}
       >
-        {renderedCells}
+        <div ref={cellsElmntRef} style={CELLS_ELMNT_STYLE}>
+          {renderedCells}
+        </div>
       </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: px(stuckColsWidth),
+          width: stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`,
+          height: px(stuckRowsHeight),
+          overflow: 'hidden',
+        }}
+      >
+        <div ref={stickyRowsElmntRef} style={CELLS_ELMNT_STYLE}>
+          {stuckRowCells}
+        </div>
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          top: px(stuckRowsHeight),
+          left: 0,
+          width: px(stuckColsWidth),
+          height: stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`,
+          overflow: 'hidden',
+        }}
+      >
+        <div ref={stickyColsElmntRef} style={CELLS_ELMNT_STYLE}>
+          {stuckColCells}
+        </div>
+      </div>
+
+      <div style={CELLS_ELMNT_STYLE}>{stuckCells}</div>
     </div>
   );
 };
 
-const px = (size: number) => `${size}px`;
+const CELLS_ELMNT_STYLE: CSSProperties = {
+  willChange: 'transform',
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  width: 0,
+  height: 0,
+};
+
+const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
 const calculateSizes = (itemSize: ItemSize, count: number): number[] =>
   typeof itemSize === 'number'
@@ -414,5 +577,17 @@ const mayUsePassive = (() => {
     return false;
   }
 })();
+
+const same = (nums1: number[], nums2: number[]) => {
+  if (nums1.length === nums2.length) {
+    for (let i = 0; i < nums1.length; i += 1) {
+      if (nums1[i] !== nums2[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+};
 
 export default Grid;
