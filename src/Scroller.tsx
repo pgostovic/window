@@ -169,17 +169,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       if (initScroll) {
         offsetRef.current = { x: colOffsets[initScroll.col], y: rowOffsets[initScroll.row] };
       }
-
       reflow();
+    }, []);
+
+    useEffect(() => {
       const rootElmnt = rootElmntRef.current;
       if (rootElmnt) {
-        const resizeObserver = new ResizeObserver(() => {
-          reflow();
-        });
+        const resizeObserver = new ResizeObserver(reflow);
         resizeObserver.observe(rootElmnt);
         return () => resizeObserver.unobserve(rootElmnt);
       }
-    }, []);
+    });
 
     const reflow = () => {
       if (rootElmntRef.current && cellsElmntRef.current) {
