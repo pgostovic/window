@@ -14,6 +14,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import ResizeObserver from 'resize-observer-polyfill';
 
 const DEFAULT_ROW_HEIGHT = 40;
 const DEFAULT_COL_WIDTH = () => ({ flex: 1, min: 80 });
@@ -685,5 +686,5 @@ const same = (nums1: number[], nums2: number[]) => {
   return false;
 };
 
-const to2d = (rows: unknown[][] | unknown[]): unknown[][] =>
-  rows.map((row: unknown[] | unknown) => (row instanceof Array ? row : [row]));
+const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
+  rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));
