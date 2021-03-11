@@ -12,7 +12,7 @@ for (let i = 0; i < 1000; i++) {
   sizes.push(20 + Math.round(Math.random() * 50));
 }
 
-let offset = 0;
+let offset = { x: 0, y: 0 };
 
 export const ItemSizes: FC = () => {
   const windowRef = useRef<ScrollerRef>();
@@ -28,7 +28,7 @@ export const ItemSizes: FC = () => {
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
         rows={numbers}
-        rowSize={index => sizes[index]}
+        rowHeight={index => sizes[index]}
         initOffset={offset}
       >
         {(num: number, i) => (

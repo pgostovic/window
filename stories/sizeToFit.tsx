@@ -18,7 +18,7 @@ export const SizeToFit: FC = () => (
       If you don&apos;t constrain the height of the Scroller, then all items will be rendered and
       windowing will be effectively disabled.
     </p>
-    <Scroller style={{ width: '200px' }} rows={numbers} rowSize={index => sizes[index]}>
+    <Scroller style={{ width: '200px' }} rows={numbers} rowHeight={index => sizes[index]}>
       {(num: number, i) => (
         <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
           <span style={{ flex: 1 }}>{num}</span>
