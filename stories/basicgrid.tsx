@@ -19,6 +19,13 @@ export const BasicGrid: FC = () => (
       rows={rows}
       stickyRows={[0, 3, 10]}
       stickyCols={[5, 10, 15]}
-    />
+      cellSpan={(cell, r, c) =>
+        r === 20 && c === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
+      }
+    >
+      {(cell, r, c) =>
+        r === 20 && c === 20 ? <div style={{ backgroundColor: '#eee' }}>{cell}</div> : cell
+      }
+    </Scroller>
   </>
 );

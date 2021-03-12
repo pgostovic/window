@@ -27,10 +27,16 @@ interface FlexSize {
 }
 type ItemSize = number | ((index: number) => number | FlexSize);
 
+interface CellSpan {
+  rows: number;
+  cols: number;
+}
+
 interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
   colWidth?: ItemSize;
+  cellSpan?(cell: unknown, row: number, col: number): CellSpan;
   stickyRows?: number[];
   stickyCols?: number[];
   initOffset?: { x: number; y: number };
@@ -69,6 +75,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       rows: rowsRaw,
       rowHeight = DEFAULT_ROW_HEIGHT,
       colWidth = DEFAULT_COL_WIDTH,
+      cellSpan = () => ({ rows: 1, cols: 1 }),
       stickyRows = [],
       stickyCols = [],
       initOffset = { x: 0, y: 0 },
@@ -443,13 +450,35 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }, [onRenderRows, fromRow, toRow, fromCol, toCol]);
 
+    const visibleCells = useMemo(() => {
+      const cells: boolean[][] = new Array(numRows)
+        .fill(null)
+        .map(() => new Array(numCols).fill(true));
+
+      for (let r = fromRow; r < toRow; r += 1) {
+        for (let c = fromCol; c < toCol; c += 1) {
+          const span = cellSpan(rows[r][c], r, c);
+          if (span.rows !== 1 || span.cols !== 1) {
+            for (let rr = 0; rr < span.rows; rr++) {
+              for (let cc = 0; cc < span.cols; cc++) {
+                if (rr !== 0 || cc !== 0) {
+                  cells[r + rr][c + cc] = false;
+                }
+              }
+            }
+          }
+        }
+      }
+      return cells;
+    }, [rows, numCols, numRows, fromRow, toRow, fromCol, toCol]);
+
     const makeRenderedCell = (
       r: number,
       c: number,
       top = px(rowOffsets[r] - rowOffsets[fromRow]),
       left = px(colOffsets[c] - colOffsets[fromCol]),
     ) => {
-      const renderedCell = children(rows[r][c], r, c);
+      const renderedCell = visibleCells[r][c] && children(rows[r][c], r, c);
       if (renderedCell) {
         const renderedCellElement = isValidElement(renderedCell) ? (
           renderedCell
@@ -458,14 +487,26 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         );
         const { style, key } = renderedCellElement.props;
 
+        const span = cellSpan(rows[r][c], r, c);
+
+        const cellWidth =
+          span.cols === 1
+            ? colWidths[c]
+            : colWidths.slice(c, c + span.cols).reduce((cw, w) => cw + w, 0);
+
+        const cellHeight =
+          span.rows === 1
+            ? rowHeights[r]
+            : rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0);
+
         return cloneElement(renderedCellElement, {
           key: key || `${r}-${c}`,
           style: {
             ...style,
             boxSizing: 'border-box',
             position: 'absolute',
-            width: px(colWidths[c]),
-            height: px(rowHeights[r]),
+            width: px(cellWidth),
+            height: px(cellHeight),
             top,
             left,
           },
