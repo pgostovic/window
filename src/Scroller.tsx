@@ -21,6 +21,14 @@ const DEFAULT_COL_WIDTH = () => ({ flex: 1, min: 80 });
 const DEFAULT_SCROLL_SPEED = 1;
 const DEFAULT_RENDER_BATCH_SIZE = 5;
 
+const scrollerClassIter = (function* nameGen(): IterableIterator<string> {
+  let i = 0;
+  while (true) {
+    i += 1;
+    yield `scr-${i}`;
+  }
+})();
+
 interface FlexSize {
   flex: number;
   min: number;
@@ -109,6 +117,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const stuckRowsRef = useRef<number[]>([]);
     const stuckColsRef = useRef<number[]>([]);
     const [, setRenderFlag] = useState(false);
+    const rootElmntClassName = useMemo(() => scrollerClassIter.next().value as string, []);
 
     if (ref) {
       ref.current = {
@@ -472,12 +481,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       return cells;
     }, [rows, numCols, numRows, fromRow, toRow, fromCol, toCol]);
 
-    const makeRenderedCell = (
-      r: number,
-      c: number,
-      top = px(rowOffsets[r] - rowOffsets[fromRow]),
-      left = px(colOffsets[c] - colOffsets[fromCol]),
-    ) => {
+    const makeRenderedCell = (r: number, c: number) => {
       const renderedCell = visibleCells[r][c] && children(rows[r][c], r, c);
       if (renderedCell) {
         const renderedCellElement = isValidElement(renderedCell) ? (
@@ -489,26 +493,23 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
         const span = cellSpan(rows[r][c], r, c);
 
-        const cellWidth =
+        const cellWidthOverridePx =
           span.cols === 1
-            ? colWidths[c]
+            ? undefined
             : colWidths.slice(c, c + span.cols).reduce((cw, w) => cw + w, 0);
 
-        const cellHeight =
+        const cellHeightOverridePx =
           span.rows === 1
-            ? rowHeights[r]
-            : rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0);
+            ? undefined
+            : px(rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0));
 
         return cloneElement(renderedCellElement, {
           key: key || `${r}-${c}`,
+          className: `r${r} c${c}`,
           style: {
             ...style,
-            boxSizing: 'border-box',
-            position: 'absolute',
-            width: px(cellWidth),
-            height: px(cellHeight),
-            top,
-            left,
+            width: cellWidthOverridePx,
+            height: cellHeightOverridePx,
           },
         });
       }
@@ -520,9 +521,19 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const stuckRowsHeight = stuckRows.reduce((h, r) => h + rowHeights[r], 0);
     const stuckColsWidth = stuckCols.reduce((w, c) => w + colWidths[c], 0);
 
+    const rowStyles: string[] = [];
+    const colStyles: string[] = [];
+
     const renderedCells: ReactElement[] = [];
     for (let r = fromRow; r < toRow; r += 1) {
       if (!stuckRows.includes(r)) {
+        const rowTop = rowOffsets[r] - rowOffsets[fromRow];
+        const rowHeight = rowHeights[r];
+        rowStyles.push(
+          `.${rootElmntClassName} > .cells > div > .r${r} { top: ${px(rowTop)}; height: ${px(
+            rowHeight,
+          )}; }`,
+        );
         for (let c = fromCol; c < toCol; c += 1) {
           if (!stuckCols.includes(c)) {
             const cell = makeRenderedCell(r, c);
@@ -534,12 +545,30 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }
 
+    for (let c = fromCol; c < toCol; c += 1) {
+      if (!stuckCols.includes(c)) {
+        const colLeft = colOffsets[c] - colOffsets[fromCol];
+        const colWidth = colWidths[c];
+        colStyles.push(
+          `.${rootElmntClassName} > .cells > div > .c${c} { left: ${px(colLeft)}; width: ${px(
+            colWidth,
+          )}; }`,
+        );
+      }
+    }
+
     const stuckRowCells: ReactElement[] = [];
     let stuckRowTop = 0;
     stuckRows.forEach(r => {
+      const rowHeight = rowHeights[r];
+      rowStyles.push(
+        `.${rootElmntClassName} > .stickyRows > div > .r${r} { top: ${px(
+          stuckRowTop,
+        )}; height: ${px(rowHeight)}; }`,
+      );
       for (let c = fromCol; c < toCol; c += 1) {
         if (!stuckCols.includes(c)) {
-          const cell = makeRenderedCell(r, c, stuckRowTop);
+          const cell = makeRenderedCell(r, c);
           if (cell) {
             stuckRowCells.push(cell);
           }
@@ -551,9 +580,15 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const stuckColCells: ReactElement[] = [];
     let stuckColLeft = 0;
     stuckCols.forEach(c => {
+      const colWidth = colWidths[c];
+      colStyles.push(
+        `.${rootElmntClassName} > .stickyCols > div > .c${c} { left: ${px(
+          stuckColLeft,
+        )}; width: ${px(colWidth)}; }`,
+      );
       for (let r = fromRow; r < toRow; r += 1) {
         if (!stuckRows.includes(r)) {
-          const cell = makeRenderedCell(r, c, undefined, stuckColLeft);
+          const cell = makeRenderedCell(r, c);
           if (cell) {
             stuckColCells.push(cell);
           }
@@ -567,13 +602,35 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     stuckRows.forEach(r => {
       stuckColLeft = 0;
       stuckCols.forEach(c => {
-        const cell = makeRenderedCell(r, c, stuckRowTop, stuckColLeft);
+        const cell = makeRenderedCell(r, c);
         if (cell) {
           stuckCells.push(cell);
         }
         stuckColLeft += colWidths[c];
       });
       stuckRowTop += rowHeights[r];
+    });
+
+    stuckRowTop = 0;
+    stuckRows.forEach(r => {
+      const rowHeight = rowHeights[r];
+      rowStyles.push(
+        `.${rootElmntClassName} > .stickyCells > .r${r} { top: ${px(stuckRowTop)}; height: ${px(
+          rowHeight,
+        )}; }`,
+      );
+      stuckRowTop += rowHeight;
+    });
+
+    stuckColLeft = 0;
+    stuckCols.forEach(c => {
+      const colWidth = colWidths[c];
+      rowStyles.push(
+        `.${rootElmntClassName} > .stickyCells > .c${c} { left: ${px(stuckColLeft)}; width: ${px(
+          colWidth,
+        )}; }`,
+      );
+      stuckColLeft += colWidth;
     });
 
     const naturalHeight =
@@ -585,80 +642,85 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         ? px(totalSize.width)
         : undefined;
 
+    const theStyle = `
+      .${rootElmntClassName} > .cells {
+        position: absolute;
+        overflow: hidden;
+        top: ${px(stuckRowsHeight)};
+        left: ${px(stuckColsWidth)};
+        width: ${stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`};
+        height: ${stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`};
+      }
+
+      .${rootElmntClassName} > .stickyRows { top: 0; height: ${px(stuckRowsHeight)}; }
+      .${rootElmntClassName} > .stickyCols { left: 0; width: ${px(stuckColsWidth)}; }
+
+      .${rootElmntClassName} > .stickyCells {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .${rootElmntClassName} > .cells > div,
+      .${rootElmntClassName} > .stickyRows > div,
+      .${rootElmntClassName} > .stickyCols > div
+      {
+        will-change: transform;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .${rootElmntClassName} > .stickyCells > *,
+      .${rootElmntClassName} > .cells > div > *,
+      .${rootElmntClassName} > .stickyRows > div > *,
+      .${rootElmntClassName} > .stickyCols > div > *
+      {
+        box-sizing: border-box;
+        position: absolute;
+      }
+
+      ${rowStyles.join('\n')}
+      ${colStyles.join('\n')}
+    `;
+
     return (
-      <div
-        ref={rootElmntRef}
-        style={{
-          width: naturalWidth,
-          height: naturalHeight,
-          ...style,
-          position: 'relative',
-        }}
-        className={className}
-      >
+      <>
+        <style>{theStyle}</style>
         <div
+          ref={rootElmntRef}
           style={{
-            position: 'absolute',
-            top: px(stuckRowsHeight),
-            left: px(stuckColsWidth),
-            width: stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`,
-            height: stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`,
-            overflow: 'hidden',
+            width: naturalWidth,
+            height: naturalHeight,
+            ...style,
+            position: 'relative',
           }}
+          className={[rootElmntClassName, className].filter(Boolean).join(' ')}
         >
-          <div ref={cellsElmntRef} style={CELLS_ELMNT_STYLE}>
-            {renderedCells}
+          <div className="cells">
+            <div ref={cellsElmntRef}>{renderedCells}</div>
+          </div>
+
+          <div className={[stickyClassName, 'cells stickyRows'].filter(Boolean).join(' ')}>
+            <div ref={stickyRowsElmntRef}>{stuckRowCells}</div>
+          </div>
+
+          <div className={[stickyClassName, 'cells stickyCols'].filter(Boolean).join(' ')}>
+            <div ref={stickyColsElmntRef}>{stuckColCells}</div>
+          </div>
+
+          <div className={['stickyCells', stickyClassName].filter(Boolean).join(' ')}>
+            {stuckCells}
           </div>
         </div>
-
-        <div
-          className={[stickyClassName, 'stickyRows'].filter(Boolean).join(' ')}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: px(stuckColsWidth),
-            width: stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`,
-            height: px(stuckRowsHeight),
-            overflow: 'hidden',
-          }}
-        >
-          <div ref={stickyRowsElmntRef} style={CELLS_ELMNT_STYLE}>
-            {stuckRowCells}
-          </div>
-        </div>
-
-        <div
-          className={[stickyClassName, 'stickyCols'].filter(Boolean).join(' ')}
-          style={{
-            position: 'absolute',
-            top: px(stuckRowsHeight),
-            left: 0,
-            width: px(stuckColsWidth),
-            height: stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`,
-            overflow: 'hidden',
-          }}
-        >
-          <div ref={stickyColsElmntRef} style={CELLS_ELMNT_STYLE}>
-            {stuckColCells}
-          </div>
-        </div>
-
-        <div className={stickyClassName} style={CELLS_ELMNT_STYLE}>
-          {stuckCells}
-        </div>
-      </div>
+      </>
     );
   },
 );
-
-const CELLS_ELMNT_STYLE: CSSProperties = {
-  willChange: 'transform',
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  width: 0,
-  height: 0,
-};
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
