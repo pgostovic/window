@@ -315,7 +315,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
             // render rows if needed
             if (
-              force ||
               fromRow !== renderWindow.fromRow ||
               toRow !== renderWindow.toRow ||
               fromCol !== renderWindow.fromCol ||
