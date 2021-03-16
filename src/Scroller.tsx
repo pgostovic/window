@@ -667,8 +667,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     const theStyle = `
       .${rootElmntClassName} {
-        width: ${naturalWidth || 'auto'};
-        height: ${naturalHeight || 'auto'};
+        ${naturalWidth ? `width: ${naturalWidth}` : ''};
+        ${naturalHeight ? `height: ${naturalHeight}` : ''};
         position: relative;
       }
 
