@@ -12,8 +12,15 @@ for (let r = 0; r < 1000; r++) {
   rows.push(row);
 }
 
+const theStyle = `
+  .spanner {
+    background-color: #eee;
+  }
+`;
+
 export const BasicGrid: FC = () => (
   <>
+    <style>{theStyle}</style>
     <Scroller
       style={{ height: '500px' }}
       rows={rows}
@@ -23,9 +30,7 @@ export const BasicGrid: FC = () => (
         r === 20 && c === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
       }
     >
-      {(cell, r, c) =>
-        r === 20 && c === 20 ? <div style={{ backgroundColor: '#eee' }}>{cell}</div> : cell
-      }
+      {(cell, r, c) => (r === 20 && c === 20 ? <div className="spanner">{cell}</div> : cell)}
     </Scroller>
   </>
 );

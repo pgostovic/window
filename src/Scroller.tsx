@@ -489,7 +489,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         ) : (
           <div>{renderedCell}</div>
         );
-        const { style, key } = renderedCellElement.props;
+        const { style, className, key } = renderedCellElement.props;
 
         const span = cellSpan(rows[r][c], r, c);
 
@@ -505,7 +505,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
         return cloneElement(renderedCellElement, {
           key: key || `${r}-${c}`,
-          className: `r${r} c${c}`,
+          className: [className, `r${r} c${c}`].filter(Boolean).join(' '),
           style: {
             ...style,
             width: cellWidthOverridePx,
@@ -643,6 +643,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         : undefined;
 
     const theStyle = `
+      .${rootElmntClassName} {
+        width: ${naturalWidth};
+        height: ${naturalHeight};
+        position: relative;
+      }
+
       .${rootElmntClassName} > .cells {
         position: absolute;
         overflow: hidden;
@@ -693,12 +699,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         <style>{theStyle}</style>
         <div
           ref={rootElmntRef}
-          style={{
-            width: naturalWidth,
-            height: naturalHeight,
-            ...style,
-            position: 'relative',
-          }}
+          style={style}
           className={[rootElmntClassName, className].filter(Boolean).join(' ')}
         >
           <div className="cells">
