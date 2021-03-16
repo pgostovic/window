@@ -7,3 +7,4 @@ export * from './scrollTo';
 export * from './eventSource';
 export * from './sizeToFit';
 export * from './basicgrid';
+export * from './flexWidth';

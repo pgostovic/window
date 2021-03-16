@@ -112,8 +112,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const offsetRef = useRef(initOffset);
     const rafPidRef = useRef(0);
     const scrollPidRef = useRef<NodeJS.Timeout>();
+    const resizePidRef = useRef<NodeJS.Timeout>();
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
     const windowSizeRef = useRef({ width: 0, height: 0 });
+    const sizeToFit = useRef({ width: true, height: true });
     const stuckRowsRef = useRef<number[]>([]);
     const stuckColsRef = useRef<number[]>([]);
     const [, setRenderFlag] = useState(false);
@@ -157,7 +159,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     const rowHeights = useMemo(
       () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height),
-      [rows, rowHeight, windowSizeRef.current],
+      [rows, rowHeight, windowSizeRef.current.height],
     );
     const rowOffsets = useMemo(() => calculateOffsets(rowHeights), [rowHeights]);
     const colWidths = useMemo(
@@ -185,29 +187,52 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       if (initScroll) {
         offsetRef.current = { x: colOffsets[initScroll.col], y: rowOffsets[initScroll.row] };
       }
+
+      if (rootElmntRef.current) {
+        const { width, height } = rootElmntRef.current.getBoundingClientRect();
+        windowSizeRef.current = { width, height };
+        sizeToFit.current = { width: width === 0, height: height === 0 };
+      }
+
       reflow();
     }, []);
 
     useEffect(() => {
       const rootElmnt = rootElmntRef.current;
       if (rootElmnt) {
-        const resizeObserver = new ResizeObserver(reflow);
+        const resizeObserver = new ResizeObserver(() => {
+          if (resizePidRef.current) {
+            clearTimeout(resizePidRef.current);
+          }
+          resizePidRef.current = setTimeout(() => {
+            const { width, height } = rootElmnt.getBoundingClientRect();
+
+            if (width !== windowSizeRef.current.width || height !== windowSizeRef.current.height) {
+              windowSizeRef.current = { width, height };
+              reflow();
+              setRenderFlag(rf => !rf);
+            }
+          }, 200);
+        });
         resizeObserver.observe(rootElmnt);
         return () => resizeObserver.unobserve(rootElmnt);
       }
-    });
+    }, [setRenderFlag]);
 
     const reflow = () => {
-      if (rootElmntRef.current && cellsElmntRef.current) {
-        const { width, height } = rootElmntRef.current.getBoundingClientRect();
-        windowSizeRef.current = { width, height };
-        setOffset(
-          cellsElmntRef.current,
-          stickyRowsElmntRef.current,
-          stickyColsElmntRef.current,
-          offsetRef.current,
-          true,
-        );
+      const rootElmnt = rootElmntRef.current || document.querySelector(`.${rootElmntClassName}`);
+      const cellsElmnt =
+        cellsElmntRef.current ||
+        document.querySelector(`.${rootElmntClassName} > .nonSticky > div`);
+      const stickyRowsElmnt =
+        stickyRowsElmntRef.current ||
+        document.querySelector(`.${rootElmntClassName} > .stickyRows > div`);
+      const stickyColsElmnt =
+        stickyColsElmntRef.current ||
+        document.querySelector(`.${rootElmntClassName} > .stickyCols > div`);
+
+      if (rootElmnt && cellsElmnt && stickyRowsElmnt && stickyColsElmnt) {
+        setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offsetRef.current, true);
       }
     };
 
@@ -244,14 +269,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           }
 
           const visibleTo = {
-            row:
-              height === 0
-                ? numRows
-                : rowOffsets.findIndex(rowOffset => rowOffset >= offset.y + height),
-            col:
-              width === 0
-                ? numCols
-                : colOffsets.findIndex(colOffset => colOffset >= offset.x + width),
+            row: sizeToFit.current.height
+              ? numRows
+              : rowOffsets.findIndex(rowOffset => rowOffset >= offset.y + height),
+            col: sizeToFit.current.width
+              ? numCols
+              : colOffsets.findIndex(colOffset => colOffset >= offset.x + width),
           };
           if (visibleTo.row === -1) {
             visibleTo.row = numRows;
@@ -354,8 +377,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           return;
         }
 
-        const effectiveDeltaX = windowSizeRef.current.width === 0 ? 0 : deltaX;
-        const effectiveDeltaY = windowSizeRef.current.height === 0 ? 0 : deltaY;
+        const effectiveDeltaX = sizeToFit.current.width ? 0 : deltaX;
+        const effectiveDeltaY = sizeToFit.current.height ? 0 : deltaY;
 
         const offset = {
           x: Math.min(
@@ -634,18 +657,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     });
 
     const naturalHeight =
-      windowSizeRef.current.height === 0 && renderWindowRef.current.toRow > 0
+      sizeToFit.current.height && renderWindowRef.current.toRow > 0
         ? px(totalSize.height)
         : undefined;
     const naturalWidth =
-      windowSizeRef.current.width === 0 && renderWindowRef.current.toCol > 0
+      sizeToFit.current.width && renderWindowRef.current.toCol > 0
         ? px(totalSize.width)
         : undefined;
 
     const theStyle = `
       .${rootElmntClassName} {
-        width: ${naturalWidth};
-        height: ${naturalHeight};
+        width: ${naturalWidth || 'auto'};
+        height: ${naturalHeight || 'auto'};
         position: relative;
       }
 
@@ -702,7 +725,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           style={style}
           className={[rootElmntClassName, className].filter(Boolean).join(' ')}
         >
-          <div className="cells">
+          <div className="cells nonSticky">
             <div ref={cellsElmntRef}>{renderedCells}</div>
           </div>
 
