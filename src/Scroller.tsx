@@ -512,7 +512,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         ) : (
           <div>{renderedCell}</div>
         );
-        const { style, className, key } = renderedCellElement.props;
+        const { style, className } = renderedCellElement.props;
 
         const span = cellSpan(rows[r][c], r, c);
 
@@ -527,7 +527,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             : px(rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0));
 
         return cloneElement(renderedCellElement, {
-          key: key || `${r}-${c}`,
+          key: `${r}-${c}`,
           className: [className, `r${r} c${c}`].filter(Boolean).join(' '),
           style: {
             ...style,

@@ -30,7 +30,15 @@ export const BasicGrid: FC = () => (
         r === 20 && c === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
       }
     >
-      {(cell, r, c) => (r === 20 && c === 20 ? <div className="spanner">{cell}</div> : cell)}
+      {(cell, r, c) =>
+        r === 20 && c === 20 ? (
+          <div key="spanner" className="spanner">
+            {cell}
+          </div>
+        ) : (
+          cell
+        )
+      }
     </Scroller>
   </>
 );
