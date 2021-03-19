@@ -4,6 +4,7 @@ import React, {
   CSSProperties,
   forwardRef,
   isValidElement,
+  MouseEvent,
   MutableRefObject,
   ReactElement,
   ReactNode,
@@ -29,6 +30,12 @@ const scrollerClassIter = (function* nameGen(): IterableIterator<string> {
   }
 })();
 
+interface Cell {
+  data: unknown;
+  row: number;
+  col: number;
+}
+
 interface FlexSize {
   flex: number;
   min: number;
@@ -44,7 +51,7 @@ interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
   colWidth?: ItemSize;
-  cellSpan?(cell: unknown, row: number, col: number): CellSpan;
+  cellSpan?(cell: Cell): CellSpan;
   stickyRows?: number[];
   stickyCols?: number[];
   initOffset?: { x: number; y: number };
@@ -55,10 +62,11 @@ interface Props {
   renderBatchSize?: number;
   onRenderRows?(info: { rows: unknown[]; fromRow: number; fromCol: number }): void;
   onScrollStop?(offset: { x: number; y: number }): void;
+  onCellClick?(cell: Cell, event: MouseEvent<HTMLElement>): void;
   style?: CSSProperties;
   className?: string;
   stickyClassName?: string;
-  children?(cell: unknown, row: number, col: number): ReactNode;
+  children?(data: unknown, cell: Cell): ReactNode;
 }
 
 export interface ScrollerRef {
@@ -94,6 +102,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       renderBatchSize = DEFAULT_RENDER_BATCH_SIZE,
       onRenderRows,
       onScrollStop,
+      onCellClick,
       style,
       className,
       stickyClassName,
@@ -489,7 +498,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       for (let r = fromRow; r < toRow; r += 1) {
         for (let c = fromCol; c < toCol; c += 1) {
-          const span = cellSpan(rows[r][c], r, c);
+          const span = cellSpan({ data: rows[r][c], row: r, col: c });
           if (span.rows !== 1 || span.cols !== 1) {
             for (let rr = 0; rr < span.rows; rr++) {
               for (let cc = 0; cc < span.cols; cc++) {
@@ -505,7 +514,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     }, [rows, numCols, numRows, fromRow, toRow, fromCol, toCol]);
 
     const makeRenderedCell = (r: number, c: number) => {
-      const renderedCell = visibleCells[r][c] && children(rows[r][c], r, c);
+      const renderedCell =
+        visibleCells[r][c] && children(rows[r][c], { data: rows[r][c], row: r, col: c });
       if (renderedCell) {
         const renderedCellElement = isValidElement(renderedCell) ? (
           renderedCell
@@ -514,7 +524,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         );
         const { style, className } = renderedCellElement.props;
 
-        const span = cellSpan(rows[r][c], r, c);
+        const span = cellSpan({ data: rows[r][c], row: r, col: c });
 
         const cellWidthOverridePx =
           span.cols === 1
@@ -553,7 +563,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const rowTop = rowOffsets[r] - rowOffsets[fromRow];
         const rowHeight = rowHeights[r];
         rowStyles.push(
-          `.${rootElmntClassName} > .cells > div > .r${r} { top: ${px(rowTop)}; height: ${px(
+          `.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; height: ${px(
             rowHeight,
           )}; }`,
         );
@@ -573,7 +583,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const colLeft = colOffsets[c] - colOffsets[fromCol];
         const colWidth = colWidths[c];
         colStyles.push(
-          `.${rootElmntClassName} > .cells > div > .c${c} { left: ${px(colLeft)}; width: ${px(
+          `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; width: ${px(
             colWidth,
           )}; }`,
         );
@@ -672,7 +682,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         position: relative;
       }
 
-      .${rootElmntClassName} > .cells {
+      .${rootElmntClassName} > .window {
         position: absolute;
         overflow: hidden;
         top: ${px(stuckRowsHeight)};
@@ -688,13 +698,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         position: absolute;
         top: 0;
         left: 0;
-        width: 0;
-        height: 0;
+        width: ${px(stuckColsWidth)};
+        height: ${px(stuckRowsHeight)};
       }
 
-      .${rootElmntClassName} > .cells > div,
-      .${rootElmntClassName} > .stickyRows > div,
-      .${rootElmntClassName} > .stickyCols > div
+      .${rootElmntClassName} > .window > div
       {
         will-change: transform;
         position: absolute;
@@ -705,9 +713,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
 
       .${rootElmntClassName} > .stickyCells > *,
-      .${rootElmntClassName} > .cells > div > *,
-      .${rootElmntClassName} > .stickyRows > div > *,
-      .${rootElmntClassName} > .stickyCols > div > *
+      .${rootElmntClassName} > .window > div > *
       {
         box-sizing: border-box;
         position: absolute;
@@ -717,6 +723,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       ${colStyles.join('\n')}
     `;
 
+    const onClick = useCallback(
+      (event: MouseEvent<HTMLElement>) => {
+        if (onCellClick) {
+          const cell = cellFromEvent(event.nativeEvent, rows);
+          if (cell) {
+            onCellClick(cell, event);
+          }
+        }
+      },
+      [onCellClick, rows],
+    );
+
     return (
       <>
         <style>{theStyle}</style>
@@ -724,20 +742,27 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           ref={rootElmntRef}
           style={style}
           className={[rootElmntClassName, className].filter(Boolean).join(' ')}
+          onClick={onCellClick ? onClick : undefined}
         >
-          <div className="cells nonSticky">
-            <div ref={cellsElmntRef}>{renderedCells}</div>
+          <div className="window nonSticky">
+            <div ref={cellsElmntRef} className="cells">
+              {renderedCells}
+            </div>
           </div>
 
-          <div className={[stickyClassName, 'cells stickyRows'].filter(Boolean).join(' ')}>
-            <div ref={stickyRowsElmntRef}>{stuckRowCells}</div>
+          <div className={[stickyClassName, 'window stickyRows'].filter(Boolean).join(' ')}>
+            <div ref={stickyRowsElmntRef} className="cells">
+              {stuckRowCells}
+            </div>
           </div>
 
-          <div className={[stickyClassName, 'cells stickyCols'].filter(Boolean).join(' ')}>
-            <div ref={stickyColsElmntRef}>{stuckColCells}</div>
+          <div className={[stickyClassName, 'window stickyCols'].filter(Boolean).join(' ')}>
+            <div ref={stickyColsElmntRef} className="cells">
+              {stuckColCells}
+            </div>
           </div>
 
-          <div className={['stickyCells', stickyClassName].filter(Boolean).join(' ')}>
+          <div className={['cells', 'stickyCells', stickyClassName].filter(Boolean).join(' ')}>
             {stuckCells}
           </div>
         </div>
@@ -815,3 +840,31 @@ const same = (nums1: number[], nums2: number[]) => {
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
   rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));
+
+const cellFromEvent = (event: Event, rows: unknown[][]): Cell | undefined => {
+  let cellElmnt = event.target as HTMLElement | null;
+  while (cellElmnt) {
+    const parentElement = cellElmnt.parentElement;
+    if (parentElement?.className.split(' ').includes('cells')) {
+      break;
+    } else {
+      cellElmnt = parentElement;
+    }
+  }
+  if (cellElmnt) {
+    const classNames = cellElmnt.className.split(' ');
+    const { row, col } = classNames.reduce(
+      (coords, cn) => {
+        const m = cn.match(/([rc])(\d+)/);
+        if (m && m[1] === 'r') {
+          return { ...coords, row: Number(m[2]) };
+        } else if (m && m[1] === 'c') {
+          return { ...coords, col: Number(m[2]) };
+        }
+        return coords;
+      },
+      { row: -1, col: -1 },
+    );
+    return { row, col, data: rows[row][col] };
+  }
+};

@@ -26,12 +26,13 @@ export const BasicGrid: FC = () => (
       rows={rows}
       stickyRows={[0, 3, 10]}
       stickyCols={[5, 10, 15]}
-      cellSpan={(cell, r, c) =>
-        r === 20 && c === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
+      cellSpan={({ row, col }) =>
+        row === 20 && col === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
       }
+      onCellClick={cell => console.log('CLK', cell)}
     >
-      {(cell, r, c) =>
-        r === 20 && c === 20 ? (
+      {(cell, { row, col }) =>
+        row === 20 && col === 20 ? (
           <div key="spanner" className="spanner">
             {cell}
           </div>
