@@ -30,7 +30,7 @@ const scrollerClassIter = (function* nameGen(): IterableIterator<string> {
   }
 })();
 
-interface Cell {
+export interface Cell {
   data: unknown;
   row: number;
   col: number;
