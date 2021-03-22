@@ -172,27 +172,39 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height, rowHeightOverrides),
       [rows, rowHeight, windowSizeRef.current.height, rowHeightOverrides],
     );
-    const rowOffsets = useMemo(() => calculateOffsets(rowHeights), [rowHeights]);
+    const rowOffsets = useMemo(() => calculateOffsets(rowHeights, rowHeightOverrides), [
+      rowHeights,
+      rowHeightOverrides,
+    ]);
     const colWidths = useMemo(
       () => calculateSizes(colWidth, numCols, windowSizeRef.current.width, colWidthOverrides),
       [rows, colWidth, windowSizeRef.current.width, colWidthOverrides],
     );
-    const colOffsets = useMemo(() => calculateOffsets(colWidths), [colWidths]);
+    const colOffsets = useMemo(() => calculateOffsets(colWidths, colWidthOverrides), [
+      colWidths,
+      colWidthOverrides,
+    ]);
 
     const totalSize = {
       width: numCols === 0 ? 0 : colOffsets[numCols - 1] + colWidths[numCols - 1],
       height: numRows === 0 ? 0 : rowOffsets[numRows - 1] + rowHeights[numRows - 1],
     };
     const maxOffset = {
-      x: totalSize.width - windowSizeRef.current.width,
-      y: totalSize.height - windowSizeRef.current.height,
+      x: Math.max(0, totalSize.width - windowSizeRef.current.width),
+      y: Math.max(0, totalSize.height - windowSizeRef.current.height),
     };
 
     const sortedStickyRows = [...stickyRows].sort((a, b) => a - b);
-    const stickyRowOffsets = calculateOffsets(sortedStickyRows.map(r => rowHeights[r]));
+    const stickyRowOffsets = calculateOffsets(
+      sortedStickyRows.map(r => rowHeights[r]),
+      rowHeightOverrides,
+    );
 
     const sortedStickyCols = [...stickyCols].sort((a, b) => a - b);
-    const stickyColOffsets = calculateOffsets(sortedStickyCols.map(c => colWidths[c]));
+    const stickyColOffsets = calculateOffsets(
+      sortedStickyCols.map(c => colWidths[c]),
+      colWidthOverrides,
+    );
 
     useEffect(() => {
       if (initScroll) {
@@ -207,6 +219,26 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       reflow();
     }, []);
+
+    useEffect(() => {
+      // Do a reflow if the content has grown from being wholy contained inside the window
+      // to being scrollable.
+      const { toRow, toCol } = renderWindowRef.current;
+      if (
+        (toRow < numRows && rowOffsets[toRow - 1] < windowSizeRef.current.height) ||
+        (toCol < numCols && colOffsets[toCol - 1] < windowSizeRef.current.width)
+      ) {
+        reflow();
+      }
+
+      // Do a reflow if the current offsets are out of bounds.
+      // This can happen if rows are removed.
+      if (offsetRef.current.x > maxOffset.x || offsetRef.current.y > maxOffset.y) {
+        offsetRef.current.x = Math.min(offsetRef.current.x, maxOffset.x);
+        offsetRef.current.y = Math.min(offsetRef.current.y, maxOffset.y);
+        reflow();
+      }
+    });
 
     useEffect(() => {
       const heightOverrides = [...rowHeightOverrides];
@@ -885,10 +917,10 @@ const calculateSizes = (
   }
 };
 
-const calculateOffsets = (itemSizes: number[]) => {
+const calculateOffsets = (itemSizes: number[], sizeOverrides: (number | undefined)[]) => {
   const offsets = itemSizes.length === 0 ? [] : [0];
   for (let i = 0; i < itemSizes.length - 1; i++) {
-    offsets.push(offsets[i] + itemSizes[i]);
+    offsets.push(offsets[i] + (sizeOverrides[i] || itemSizes[i]));
   }
   return offsets;
 };

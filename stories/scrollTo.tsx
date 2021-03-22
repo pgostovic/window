@@ -35,9 +35,9 @@ export const ScrollToIndex: FC = () => {
         initScroll={{ row: 50, col: 0 }}
         rows={people}
       >
-        {(person: Person, i) => (
+        {(person: Person, { row }) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
-            {i} - {person.firstName} {person.lastName}
+            {row} - {person.firstName} {person.lastName}
           </div>
         )}
       </Scroller>

@@ -1,14 +1,16 @@
-import React, { FC, useEffect, useRef } from 'react';
+import React, { FC, useEffect, useRef, useState } from 'react';
 
 import { Scroller, ScrollerRef } from '../src';
 
+const NUM = 1000;
+
 const numbers: number[] = [];
-for (let i = 0; i < 1000; i++) {
+for (let i = 0; i < NUM; i++) {
   numbers.push(i);
 }
 
 const sizes: (number | 'natural')[] = [];
-for (let i = 0; i < 1000; i++) {
+for (let i = 0; i < NUM; i++) {
   if (i === 0) {
     sizes.push('natural');
   } else {
@@ -20,6 +22,7 @@ let offset = { x: 0, y: 0 };
 
 export const ItemSizes: FC = () => {
   const windowRef = useRef<ScrollerRef>();
+  const [slice, setSlice] = useState(NUM);
 
   useEffect(() => {
     return () => {
@@ -28,10 +31,13 @@ export const ItemSizes: FC = () => {
   });
   return (
     <>
+      <button onClick={() => setSlice(5)}>Slice 5</button>
+      <button onClick={() => setSlice(25)}>Slice 25</button>
+      <button onClick={() => setSlice(1000)}>Slice 1000</button>
       <Scroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
-        rows={numbers}
+        rows={numbers.slice(0, slice)}
         rowHeight={index => sizes[index]}
         initOffset={offset}
       >
