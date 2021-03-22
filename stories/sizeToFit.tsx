@@ -19,10 +19,10 @@ export const SizeToFit: FC = () => (
       windowing will be effectively disabled.
     </p>
     <Scroller style={{ width: '200px' }} rows={numbers} rowHeight={index => sizes[index]}>
-      {(num: number, i) => (
+      {(num: number, { row }) => (
         <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
           <span style={{ flex: 1 }}>{num}</span>
-          <span style={{ fontSize: 'small', color: '#999' }}>{sizes[i]}px</span>
+          <span style={{ fontSize: 'small', color: '#999' }}>{sizes[row]}px</span>
         </div>
       )}
     </Scroller>

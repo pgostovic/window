@@ -24,6 +24,7 @@ export const BasicGrid: FC = () => (
     <Scroller
       style={{ height: '500px' }}
       rows={rows}
+      colWidth={c => (c === 3 ? 'natural' : 100)}
       stickyRows={[0, 3, 10]}
       stickyCols={[5, 10, 15]}
       cellSpan={({ row, col }) =>
@@ -36,6 +37,8 @@ export const BasicGrid: FC = () => (
           <div key="spanner" className="spanner">
             {cell}
           </div>
+        ) : col === 3 ? (
+          <div style={{ whiteSpace: 'nowrap', padding: '0 5px' }}>{cell}</div>
         ) : (
           cell
         )

@@ -22,10 +22,10 @@ export const FlexWidth: FC = () => (
   <>
     <style>{theStyle}</style>
     <Scroller className="scroller" rows={numbers} rowHeight={index => sizes[index]}>
-      {(num: number, i) => (
+      {(num: number, { row }) => (
         <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
           <span style={{ flex: 1 }}>{num}</span>
-          <span style={{ fontSize: 'small', color: '#999' }}>{sizes[i]}px</span>
+          <span style={{ fontSize: 'small', color: '#999' }}>{sizes[row]}px</span>
         </div>
       )}
     </Scroller>

@@ -7,9 +7,13 @@ for (let i = 0; i < 1000; i++) {
   numbers.push(i);
 }
 
-const sizes: number[] = [];
+const sizes: (number | 'natural')[] = [];
 for (let i = 0; i < 1000; i++) {
-  sizes.push(20 + Math.round(Math.random() * 50));
+  if (i === 0) {
+    sizes.push('natural');
+  } else {
+    sizes.push(20 + Math.round(Math.random() * 50));
+  }
 }
 
 let offset = { x: 0, y: 0 };
@@ -31,10 +35,10 @@ export const ItemSizes: FC = () => {
         rowHeight={index => sizes[index]}
         initOffset={offset}
       >
-        {(num: number, i) => (
+        {(num: number, { row }) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             <span style={{ flex: 1 }}>{num}</span>
-            <span style={{ fontSize: 'small', color: '#999' }}>{sizes[i]}px</span>
+            <span style={{ fontSize: 'small', color: '#999' }}>{sizes[row]}px</span>
           </div>
         )}
       </Scroller>

@@ -40,7 +40,7 @@ interface FlexSize {
   flex: number;
   min: number;
 }
-type ItemSize = number | ((index: number) => number | FlexSize);
+type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
 
 interface CellSpan {
   rows: number;
@@ -129,6 +129,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const stuckColsRef = useRef<number[]>([]);
     const [, setRenderFlag] = useState(false);
     const rootElmntClassName = useMemo(() => scrollerClassIter.next().value as string, []);
+    const [rowHeightOverrides, setRowHeightOverrides] = useState<(number | undefined)[]>([]);
+    const [colWidthOverrides, setColWidthOverrides] = useState<(number | undefined)[]>([]);
 
     if (ref) {
       ref.current = {
@@ -167,13 +169,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
     const rowHeights = useMemo(
-      () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height),
-      [rows, rowHeight, windowSizeRef.current.height],
+      () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height, rowHeightOverrides),
+      [rows, rowHeight, windowSizeRef.current.height, rowHeightOverrides],
     );
     const rowOffsets = useMemo(() => calculateOffsets(rowHeights), [rowHeights]);
     const colWidths = useMemo(
-      () => calculateSizes(colWidth, numCols, windowSizeRef.current.width),
-      [rows, colWidth, windowSizeRef.current.width],
+      () => calculateSizes(colWidth, numCols, windowSizeRef.current.width, colWidthOverrides),
+      [rows, colWidth, windowSizeRef.current.width, colWidthOverrides],
     );
     const colOffsets = useMemo(() => calculateOffsets(colWidths), [colWidths]);
 
@@ -205,6 +207,56 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       reflow();
     }, []);
+
+    useEffect(() => {
+      const heightOverrides = [...rowHeightOverrides];
+      const { fromRow, toRow } = renderWindowRef.current;
+
+      for (let i = fromRow; i < toRow; i += 1) {
+        if (typeof rowHeight === 'function' && rowHeight(i) === 'natural') {
+          const cellElmnts = Array.prototype.slice.call(
+            document.querySelectorAll(`.r${i}`),
+          ) as HTMLElement[];
+          const maxHeight = cellElmnts.reduce(
+            (max, cellElmnt) => Math.max(max, cellElmnt.getBoundingClientRect().height),
+            0,
+          );
+          heightOverrides[i] = maxHeight;
+        }
+      }
+
+      if (
+        heightOverrides.slice(fromRow, toRow).join() !==
+        rowHeightOverrides.slice(fromRow, toRow).join()
+      ) {
+        setRowHeightOverrides(heightOverrides);
+      }
+    });
+
+    useEffect(() => {
+      const widthOverrides = [...colWidthOverrides];
+      const { fromCol, toCol } = renderWindowRef.current;
+
+      for (let i = fromCol; i < toCol; i += 1) {
+        if (typeof colWidth === 'function' && colWidth(i) === 'natural') {
+          const cellElmnts = Array.prototype.slice.call(
+            document.querySelectorAll(`.c${i}`),
+          ) as HTMLElement[];
+          const maxWidth = cellElmnts.reduce(
+            (max, cellElmnt) => Math.max(max, cellElmnt.getBoundingClientRect().width),
+            0,
+          );
+          widthOverrides[i] = maxWidth;
+        }
+      }
+
+      if (
+        widthOverrides.slice(fromCol, toCol).join() !==
+        colWidthOverrides.slice(fromCol, toCol).join()
+      ) {
+        setColWidthOverrides(widthOverrides);
+      }
+    });
 
     useEffect(() => {
       const rootElmnt = rootElmntRef.current;
@@ -562,11 +614,15 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       if (!stuckRows.includes(r)) {
         const rowTop = rowOffsets[r] - rowOffsets[fromRow];
         const rowHeight = rowHeights[r];
-        rowStyles.push(
-          `.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; height: ${px(
-            rowHeight,
-          )}; }`,
-        );
+        if (rowHeight === -1) {
+          rowStyles.push(`.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; }`);
+        } else {
+          rowStyles.push(
+            `.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; height: ${px(
+              rowHeight,
+            )}; }`,
+          );
+        }
         for (let c = fromCol; c < toCol; c += 1) {
           if (!stuckCols.includes(c)) {
             const cell = makeRenderedCell(r, c);
@@ -582,11 +638,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       if (!stuckCols.includes(c)) {
         const colLeft = colOffsets[c] - colOffsets[fromCol];
         const colWidth = colWidths[c];
-        colStyles.push(
-          `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; width: ${px(
-            colWidth,
-          )}; }`,
-        );
+        if (colWidth === -1) {
+          colStyles.push(
+            `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; }`,
+          );
+        } else {
+          colStyles.push(
+            `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; width: ${px(
+              colWidth,
+            )}; }`,
+          );
+        }
       }
     }
 
@@ -773,7 +835,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
-const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number): number[] => {
+const calculateSizes = (
+  itemSize: ItemSize,
+  count: number,
+  maxSize: number,
+  sizeOverrides: (number | undefined)[],
+): number[] => {
   if (typeof itemSize === 'number') {
     return Array(count).fill(itemSize);
   } else {
@@ -792,9 +859,17 @@ const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number): num
     if (minSize < maxSize) {
       const remainder = maxSize - staticSize;
       const remainderPerFlex = remainder / flexSizes.reduce((t, s) => t + s.flex, 0);
-      return sizes.map(s => (typeof s === 'number' ? s : s.flex * remainderPerFlex));
+      return sizes.map((s, i) =>
+        sizeOverrides[i] || s === 'natural'
+          ? -1
+          : typeof s === 'number'
+          ? s
+          : s.flex * remainderPerFlex,
+      );
     } else {
-      return sizes.map(s => (typeof s === 'number' ? s : s.min));
+      return sizes.map(
+        (s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.min),
+      );
     }
   }
 };
