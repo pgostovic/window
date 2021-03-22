@@ -537,7 +537,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       };
     }, [totalSize.width, totalSize.height, maxOffset.x, maxOffset.y, scrollSpeed]);
 
-    const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
+    const fromRow = Math.max(0, Math.min(numRows - 1, renderWindowRef.current.fromRow));
+    const toRow = Math.max(0, Math.min(numRows, renderWindowRef.current.toRow));
+    const fromCol = Math.max(0, Math.min(numCols - 1, renderWindowRef.current.fromCol));
+    const toCol = Math.max(0, Math.min(numCols, renderWindowRef.current.toCol));
 
     useEffect(() => {
       if (onRenderRows) {
