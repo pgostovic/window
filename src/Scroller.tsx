@@ -213,7 +213,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       const { fromRow, toRow } = renderWindowRef.current;
 
       for (let i = fromRow; i < toRow; i += 1) {
-        if (typeof rowHeight === 'function' && rowHeight(i) === 'natural') {
+        const isNatural = typeof rowHeight === 'function' && rowHeight(i) === 'natural';
+        if (isNatural) {
           const cellElmnts = Array.prototype.slice.call(
             document.querySelectorAll(`.r${i}`),
           ) as HTMLElement[];
@@ -222,6 +223,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             0,
           );
           heightOverrides[i] = maxHeight;
+        } else {
+          heightOverrides[i] = undefined;
         }
       }
 
@@ -238,7 +241,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       const { fromCol, toCol } = renderWindowRef.current;
 
       for (let i = fromCol; i < toCol; i += 1) {
-        if (typeof colWidth === 'function' && colWidth(i) === 'natural') {
+        const isNatural = typeof colWidth === 'function' && colWidth(i) === 'natural';
+        if (isNatural) {
           const cellElmnts = Array.prototype.slice.call(
             document.querySelectorAll(`.c${i}`),
           ) as HTMLElement[];
@@ -247,6 +251,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             0,
           );
           widthOverrides[i] = maxWidth;
+        } else {
+          widthOverrides[i] = undefined;
         }
       }
 
@@ -613,13 +619,14 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     for (let r = fromRow; r < toRow; r += 1) {
       if (!stuckRows.includes(r)) {
         const rowTop = rowOffsets[r] - rowOffsets[fromRow];
-        const rowHeight = rowHeights[r];
-        if (rowHeight === -1) {
+        const height = rowHeights[r];
+        const isNatural = typeof rowHeight === 'function' && rowHeight(r) === 'natural';
+        if (isNatural) {
           rowStyles.push(`.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; }`);
         } else {
           rowStyles.push(
             `.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; height: ${px(
-              rowHeight,
+              height,
             )}; }`,
           );
         }
@@ -637,15 +644,16 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     for (let c = fromCol; c < toCol; c += 1) {
       if (!stuckCols.includes(c)) {
         const colLeft = colOffsets[c] - colOffsets[fromCol];
-        const colWidth = colWidths[c];
-        if (colWidth === -1) {
+        const width = colWidths[c];
+        const isNatural = typeof colWidth === 'function' && colWidth(c) === 'natural';
+        if (isNatural) {
           colStyles.push(
             `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; }`,
           );
         } else {
           colStyles.push(
             `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; width: ${px(
-              colWidth,
+              width,
             )}; }`,
           );
         }
