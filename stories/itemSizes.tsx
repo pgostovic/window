@@ -24,6 +24,9 @@ export const ItemSizes: FC = () => {
   const windowRef = useRef<ScrollerRef>();
   const [slice, setSlice] = useState(NUM);
 
+  const slicedNums = numbers.slice(0, slice);
+  const slicedSizes = sizes.slice(0, slice);
+
   useEffect(() => {
     return () => {
       offset = windowRef.current.getOffset();
@@ -37,14 +40,14 @@ export const ItemSizes: FC = () => {
       <Scroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
-        rows={numbers.slice(0, slice)}
-        rowHeight={index => sizes[index]}
+        rows={slicedNums}
+        rowHeight={index => slicedSizes[index]}
         initOffset={offset}
       >
         {(num: number, { row }) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             <span style={{ flex: 1 }}>{num}</span>
-            <span style={{ fontSize: 'small', color: '#999' }}>{sizes[row]}px</span>
+            <span style={{ fontSize: 'small', color: '#999' }}>{slicedSizes[row]}px</span>
           </div>
         )}
       </Scroller>

@@ -168,6 +168,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const numRows = rows.length;
     const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
+    renderWindowRef.current = {
+      fromRow: Math.max(0, Math.min(numRows - 1, renderWindowRef.current.fromRow)),
+      toRow: Math.max(0, Math.min(numRows, renderWindowRef.current.toRow)),
+      fromCol: Math.max(0, Math.min(numCols - 1, renderWindowRef.current.fromCol)),
+      toCol: Math.max(0, Math.min(numCols, renderWindowRef.current.toCol)),
+    };
+
     const rowHeights = useMemo(
       () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height, rowHeightOverrides),
       [rows, rowHeight, windowSizeRef.current.height, rowHeightOverrides],
@@ -569,10 +576,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       };
     }, [totalSize.width, totalSize.height, maxOffset.x, maxOffset.y, scrollSpeed]);
 
-    const fromRow = Math.max(0, Math.min(numRows - 1, renderWindowRef.current.fromRow));
-    const toRow = Math.max(0, Math.min(numRows, renderWindowRef.current.toRow));
-    const fromCol = Math.max(0, Math.min(numCols - 1, renderWindowRef.current.fromCol));
-    const toCol = Math.max(0, Math.min(numCols, renderWindowRef.current.toCol));
+    const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 
     useEffect(() => {
       if (onRenderRows) {
