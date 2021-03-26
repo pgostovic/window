@@ -16,14 +16,38 @@ const theStyle = `
   .spanner {
     background-color: #eee;
   }
+
+  .theCell {
+    border-top: 1px solid #ccc;
+    border-left: 1px solid #ccc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .stickyRows {
+    border-bottom: 2px solid #ccc;
+  }
+
+  .stickyCols {
+    border-right: 2px solid #ccc;
+  }
+
+  .stickyCells {
+    border-bottom: 2px solid #ccc;
+    border-right: 2px solid #ccc;
+  }
 `;
 
 export const BasicGrid: FC = () => (
   <>
     <style>{theStyle}</style>
+    <p>Hold ALT-CMD while scrolling to show the window overflow.</p>
     <Scroller
-      style={{ height: '500px' }}
+      allowShowOverflow
+      style={{ height: '500px', marginTop: '50px', backgroundColor: '#ddd' }}
       rows={rows}
+      cellClassName="theCell"
       colWidth={c => (c === 3 ? 'natural' : 100)}
       stickyRows={[0, 3, 10]}
       stickyCols={[5, 10, 15]}
@@ -38,7 +62,7 @@ export const BasicGrid: FC = () => (
             {cell}
           </div>
         ) : col === 3 ? (
-          <div style={{ whiteSpace: 'nowrap', padding: '0 5px' }}>{cell}</div>
+          <div style={{ whiteSpace: 'nowrap', minWidth: `50px` }}>{cell}</div>
         ) : (
           cell
         )

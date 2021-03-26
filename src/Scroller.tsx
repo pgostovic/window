@@ -63,8 +63,10 @@ interface Props {
   onRenderRows?(info: { rows: unknown[]; fromRow: number; fromCol: number }): void;
   onScrollStop?(offset: { x: number; y: number }): void;
   onCellClick?(cell: Cell, event: MouseEvent<HTMLElement>): void;
+  allowShowOverflow?: boolean;
   style?: CSSProperties;
   className?: string;
+  cellClassName?: string | ((cell: { row: number; col: number }) => string);
   stickyClassName?: string;
   children?(data: unknown, cell: Cell): ReactNode;
 }
@@ -103,8 +105,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       onRenderRows,
       onScrollStop,
       onCellClick,
+      allowShowOverflow = false,
       style,
       className,
+      cellClassName,
       stickyClassName,
       children = cell => cell as ReactNode,
     },
@@ -131,6 +135,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const rootElmntClassName = useMemo(() => scrollerClassIter.next().value as string, []);
     const [rowHeightOverrides, setRowHeightOverrides] = useState<(number | undefined)[]>([]);
     const [colWidthOverrides, setColWidthOverrides] = useState<(number | undefined)[]>([]);
+    const [showOverflow, setShowOverflow] = useState(false);
 
     if (ref) {
       ref.current = {
@@ -511,6 +516,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       };
 
       const onWheel = (event: WheelEvent) => {
+        setShowOverflow(allowShowOverflow && event.altKey && event.metaKey);
         scroll(event.deltaX, event.deltaY);
       };
 
@@ -633,9 +639,16 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             ? undefined
             : px(rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0));
 
+        const explicitCellClass =
+          typeof cellClassName === 'string'
+            ? cellClassName
+            : typeof cellClassName === 'function'
+            ? cellClassName({ row: r, col: c })
+            : undefined;
+
         return cloneElement(renderedCellElement, {
           key: `${r}-${c}`,
-          className: [className, `r${r} c${c}`].filter(Boolean).join(' '),
+          className: [className, `r${r} c${c}`, explicitCellClass].filter(Boolean).join(' '),
           style: {
             ...style,
             width: cellWidthOverridePx,
@@ -793,7 +806,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       .${rootElmntClassName} > .window {
         position: absolute;
-        overflow: hidden;
+        overflow: ${showOverflow ? 'visible' : 'hidden'};
         top: ${px(stuckRowsHeight)};
         left: ${px(stuckColsWidth)};
         width: ${stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`};
@@ -844,6 +857,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [onCellClick, rows],
     );
 
+    const hasStuckRows = stuckRowCells.length > 0;
+    const hasStuckCols = stuckColCells.length > 0;
+
     return (
       <>
         <style>{theStyle}</style>
@@ -859,19 +875,31 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             </div>
           </div>
 
-          <div className={[stickyClassName, 'window stickyRows'].filter(Boolean).join(' ')}>
+          <div
+            className={[stickyClassName, 'window', hasStuckRows && 'stickyRows']
+              .filter(Boolean)
+              .join(' ')}
+          >
             <div ref={stickyRowsElmntRef} className="cells">
               {stuckRowCells}
             </div>
           </div>
 
-          <div className={[stickyClassName, 'window stickyCols'].filter(Boolean).join(' ')}>
+          <div
+            className={[stickyClassName, 'window', hasStuckCols && 'stickyCols']
+              .filter(Boolean)
+              .join(' ')}
+          >
             <div ref={stickyColsElmntRef} className="cells">
               {stuckColCells}
             </div>
           </div>
 
-          <div className={['cells', 'stickyCells', stickyClassName].filter(Boolean).join(' ')}>
+          <div
+            className={['cells', hasStuckRows && hasStuckCols && 'stickyCells', stickyClassName]
+              .filter(Boolean)
+              .join(' ')}
+          >
             {stuckCells}
           </div>
         </div>
