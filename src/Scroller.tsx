@@ -813,6 +813,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         height: ${stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`};
       }
 
+      .${rootElmntClassName} > .empty {
+        display: none;
+      }
+
       .${rootElmntClassName} > .stickyRows { top: 0; height: ${px(stuckRowsHeight)}; }
       .${rootElmntClassName} > .stickyCols { left: 0; width: ${px(stuckColsWidth)}; }
 
@@ -876,7 +880,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           </div>
 
           <div
-            className={[stickyClassName, 'window', hasStuckRows && 'stickyRows']
+            className={[stickyClassName, 'window', 'stickyRows', !hasStuckRows && 'empty']
               .filter(Boolean)
               .join(' ')}
           >
@@ -886,7 +890,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           </div>
 
           <div
-            className={[stickyClassName, 'window', hasStuckCols && 'stickyCols']
+            className={[stickyClassName, 'window', 'stickyCols', !hasStuckCols && 'empty']
               .filter(Boolean)
               .join(' ')}
           >
@@ -896,7 +900,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           </div>
 
           <div
-            className={['cells', hasStuckRows && hasStuckCols && 'stickyCells', stickyClassName]
+            className={[
+              'cells',
+              'stickyCells',
+              !(hasStuckRows && hasStuckCols) && 'empty',
+              stickyClassName,
+            ]
               .filter(Boolean)
               .join(' ')}
           >

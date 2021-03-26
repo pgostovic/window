@@ -26,16 +26,16 @@ const theStyle = `
   }
 
   .stickyRows {
-    border-bottom: 2px solid #ccc;
+    border-bottom: 2px solid #999;
   }
 
   .stickyCols {
-    border-right: 2px solid #ccc;
+    border-right: 2px solid #999;
   }
 
   .stickyCells {
-    border-bottom: 2px solid #ccc;
-    border-right: 2px solid #ccc;
+    border-bottom: 2px solid #999;
+    border-right: 2px solid #999;
   }
 `;
 
