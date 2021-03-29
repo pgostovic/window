@@ -15,6 +15,8 @@ for (let r = 0; r < 1000; r++) {
 const theStyle = `
   .spanner {
     background-color: #eee;
+    width: 100%;
+    height: 100%;
   }
 
   .theCell {

@@ -841,13 +841,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         position: absolute;
       }
 
-      .${rootElmntClassName} > .stickyCells > * > *,
-      .${rootElmntClassName} > .window > div > * > *
-      {
-        width: 100%;
-        height: 100%;
-      }
-
       ${rowStyles.join('\n')}
       ${colStyles.join('\n')}
     `;
