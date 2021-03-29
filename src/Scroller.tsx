@@ -1,9 +1,7 @@
 import React, {
-  cloneElement,
   createRef,
   CSSProperties,
   forwardRef,
-  isValidElement,
   MouseEvent,
   MutableRefObject,
   ReactElement,
@@ -160,12 +158,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           return offsetRef.current;
         },
         setOffset(offset) {
-          setOffset(
-            cellsElmntRef.current,
-            stickyRowsElmntRef.current,
-            stickyColsElmntRef.current,
-            offset,
-          );
+          const cellsElmnt =
+            cellsElmntRef.current ||
+            document.querySelector(`.${rootElmntClassName} > .nonSticky > div`);
+          const stickyRowsElmnt =
+            stickyRowsElmntRef.current ||
+            document.querySelector(`.${rootElmntClassName} > .stickyRows > div`);
+          const stickyColsElmnt =
+            stickyColsElmntRef.current ||
+            document.querySelector(`.${rootElmntClassName} > .stickyCols > div`);
+
+          setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offset);
         },
       };
     }
@@ -620,13 +623,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       const renderedCell =
         visibleCells[r][c] && children(rows[r][c], { data: rows[r][c], row: r, col: c });
       if (renderedCell) {
-        const renderedCellElement = isValidElement(renderedCell) ? (
-          renderedCell
-        ) : (
-          <div>{renderedCell}</div>
-        );
-        const { style, className } = renderedCellElement.props;
-
         const span = cellSpan({ data: rows[r][c], row: r, col: c });
 
         const cellWidthOverridePx =
@@ -646,15 +642,15 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             ? cellClassName({ row: r, col: c })
             : undefined;
 
-        return cloneElement(renderedCellElement, {
-          key: `${r}-${c}`,
-          className: [className, `r${r} c${c}`, explicitCellClass].filter(Boolean).join(' '),
-          style: {
-            ...style,
-            width: cellWidthOverridePx,
-            height: cellHeightOverridePx,
-          },
-        });
+        return (
+          <div
+            key={`${r}-${c}`}
+            style={{ width: cellWidthOverridePx, height: cellHeightOverridePx }}
+            className={[`r${r} c${c}`, explicitCellClass].filter(Boolean).join(' ')}
+          >
+            {renderedCell}
+          </div>
+        );
       }
       return undefined;
     };
@@ -843,6 +839,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       {
         box-sizing: border-box;
         position: absolute;
+      }
+
+      .${rootElmntClassName} > .stickyCells > * > *,
+      .${rootElmntClassName} > .window > div > * > *
+      {
+        width: 100%;
+        height: 100%;
       }
 
       ${rowStyles.join('\n')}
