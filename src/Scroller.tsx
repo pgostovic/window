@@ -59,6 +59,7 @@ interface Props {
   eventSourceRef?: RefObject<HTMLElement>;
   renderBatchSize?: number;
   onRenderRows?(info: { rows: unknown[]; fromRow: number; fromCol: number }): void;
+  onOffsetChange?(offset: { x: number; y: number; maxX: number; maxY: number }): void;
   onScrollStop?(offset: { x: number; y: number }): void;
   onCellClick?(cell: Cell, event: MouseEvent<HTMLElement>): void;
   allowShowOverflow?: boolean;
@@ -101,6 +102,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       eventSourceRef,
       renderBatchSize = DEFAULT_RENDER_BATCH_SIZE,
       onRenderRows,
+      onOffsetChange,
       onScrollStop,
       onCellClick,
       allowShowOverflow = false,
@@ -119,7 +121,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const stickyRowsElmntRef = createRef<HTMLDivElement>();
     const stickyColsElmntRef = createRef<HTMLDivElement>();
     const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
-    const rowsTranslateRef = useRef({ x: 0, y: 0 });
     const offsetRef = useRef(initOffset);
     const rafPidRef = useRef(0);
     const scrollPidRef = useRef<NodeJS.Timeout>();
@@ -448,8 +449,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             stickyRowsElmnt.style.transform = `translateX(${translateX - stuckColsWidth}px)`;
             stickyColsElmnt.style.transform = `translateY(${translateY - stuckRowsHeight}px)`;
 
-            rowsTranslateRef.current = { x: translateX, y: translateY };
-
             // render rows if needed
             if (
               fromRow !== renderWindow.fromRow ||
@@ -465,6 +464,16 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               setRenderFlag(rf => !rf);
             }
           });
+
+          if (onOffsetChange) {
+            onOffsetChange({
+              x: offsetRef.current.x,
+              y: offsetRef.current.y,
+              maxX: maxOffset.x,
+              maxY: maxOffset.y,
+            });
+          }
+
           return true;
         } else {
           return false;
@@ -833,7 +842,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         width: 0;
         height: 0;
       }
-
+      
       .${rootElmntClassName} > .stickyCells > *,
       .${rootElmntClassName} > .window > div > *
       {

@@ -14,7 +14,14 @@ export const Basic: FC = () => (
       @phnq/window
       <Scroller style={{ height: '500px', width: '200px' }} rows={numbers} renderBatchSize={10}>
         {(num: number) => (
-          <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+          <div
+            style={{
+              height: '100%',
+              borderBottom: '1px solid #ccc',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
             {num}
           </div>
         )}
