@@ -44,7 +44,7 @@ interface CellSpan {
   cols: number;
 }
 
-type EventType =
+export type EventType =
   | 'click'
   | 'contextmenu'
   | 'dblclick'
