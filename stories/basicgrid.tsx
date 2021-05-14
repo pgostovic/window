@@ -56,7 +56,8 @@ export const BasicGrid: FC = () => (
       cellSpan={({ row, col }) =>
         row === 20 && col === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
       }
-      onCellClick={cell => console.log('CLK', cell)}
+      cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave', 'dragstart']}
+      onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
     >
       {(cell, { row, col }) =>
         row === 20 && col === 20 ? (
@@ -66,7 +67,7 @@ export const BasicGrid: FC = () => (
         ) : col === 3 ? (
           <div style={{ whiteSpace: 'nowrap', minWidth: `50px` }}>{cell}</div>
         ) : (
-          cell
+          <>{cell}</>
         )
       }
     </Scroller>

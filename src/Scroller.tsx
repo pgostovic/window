@@ -2,7 +2,6 @@ import React, {
   createRef,
   CSSProperties,
   forwardRef,
-  MouseEvent,
   MutableRefObject,
   ReactElement,
   ReactNode,
@@ -45,6 +44,26 @@ interface CellSpan {
   cols: number;
 }
 
+type EventType =
+  | 'click'
+  | 'contextmenu'
+  | 'dblclick'
+  | 'drag'
+  | 'dragend'
+  | 'dragenter'
+  | 'dragexit'
+  | 'dragleave'
+  | 'dragover'
+  | 'dragstart'
+  | 'drop'
+  | 'mousedown'
+  | 'mouseenter'
+  | 'mouseleave'
+  | 'mousemove'
+  | 'mouseout'
+  | 'mouseover'
+  | 'mouseup';
+
 interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
@@ -55,13 +74,15 @@ interface Props {
   initOffset?: { x: number; y: number };
   initScroll?: { row: number; col: number };
   scrollSpeed?: number;
+  freezeScroll?: boolean;
   eventSource?: HTMLElement | (Window & typeof globalThis);
   eventSourceRef?: RefObject<HTMLElement>;
   renderBatchSize?: number;
   onRenderRows?(info: { rows: unknown[]; fromRow: number; fromCol: number }): void;
   onOffsetChange?(offset: { x: number; y: number; maxX: number; maxY: number }): void;
   onScrollStop?(offset: { x: number; y: number }): void;
-  onCellClick?(cell: Cell, event: MouseEvent<HTMLElement>): void;
+  cellEventTypes?: EventType[];
+  onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   allowShowOverflow?: boolean;
   style?: CSSProperties;
   className?: string;
@@ -98,13 +119,15 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       initOffset = { x: 0, y: 0 },
       initScroll,
       scrollSpeed = DEFAULT_SCROLL_SPEED,
+      freezeScroll = false,
       eventSource,
       eventSourceRef,
       renderBatchSize = DEFAULT_RENDER_BATCH_SIZE,
       onRenderRows,
       onOffsetChange,
       onScrollStop,
-      onCellClick,
+      cellEventTypes = [],
+      onCellEvent,
       allowShowOverflow = false,
       style,
       className,
@@ -483,6 +506,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     );
 
     useEffect(() => {
+      if (freezeScroll) {
+        return;
+      }
+
       const source = (eventSource || eventSourceRef?.current || rootElmntRef.current) as
         | HTMLElement
         | undefined;
@@ -592,7 +619,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           source.removeEventListener('touchend', onTouchEnd);
         }
       };
-    }, [totalSize.width, totalSize.height, maxOffset.x, maxOffset.y, scrollSpeed]);
+    }, [totalSize.width, totalSize.height, maxOffset.x, maxOffset.y, scrollSpeed, freezeScroll]);
 
     const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 
@@ -628,6 +655,70 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       return cells;
     }, [rows, numCols, numRows, fromRow, toRow, fromCol, toCol]);
 
+    const currentHoverCell = useRef<Cell>();
+
+    /**
+     * Handle cell events
+     * ==================
+     * Event listeners are not added to the actual cell elements because they
+     * come and go quickly with scrolling. So, to avoid constantly adding and
+     * removing listeners, the root element is used instead. The `event.target`
+     * is used to determine the correct cell-related ancestor element by climbing
+     * the DOM heirarchy. However, this doesn't work for `mouseenter` and
+     * `mouseleave` because those events don't affect descendents. Instead,
+     * `mouseover` is used because it does work on descendent elements. Since
+     * a cell may contain an abribtrarily deep DOM structure, consecutive events
+     * are likely to be triggered from within the same cell element. These are
+     * filtered out by keeping track of the "current" hovered cell, and only
+     * invoking the handler when it changes. Finally, `mouseleave` is observed
+     * on the root element which, when fired, will result in a `mouseleave`
+     * hanlder invokation on the "current" hovered cell.
+     */
+    useEffect(() => {
+      if (onCellEvent) {
+        const types = new Set<EventType>(
+          cellEventTypes.includes('mouseenter') || cellEventTypes.includes('mouseleave')
+            ? [...cellEventTypes, 'mouseover', 'mouseleave']
+            : cellEventTypes,
+        );
+
+        const handler = (event: Event) => {
+          const cell = cellFromEvent(event, rows);
+          if (cell && types.has(event.type as EventType)) {
+            if (
+              (types.has('mouseenter') || types.has('mouseleave')) &&
+              event.type === 'mouseover' &&
+              !sameCell(cell, currentHoverCell.current)
+            ) {
+              if (currentHoverCell.current && cellEventTypes.includes('mouseleave')) {
+                onCellEvent('mouseleave', currentHoverCell.current, event);
+              }
+              if (cell && cellEventTypes.includes('mouseenter')) {
+                onCellEvent('mouseenter', cell, event);
+              }
+              currentHoverCell.current = cell;
+            }
+
+            if (cellEventTypes.includes(event.type as EventType)) {
+              onCellEvent(event.type as EventType, cell, event);
+            }
+          } else if (
+            currentHoverCell.current &&
+            event.type === 'mouseleave' &&
+            (event.target as Element).className === rootElmntClassName
+          ) {
+            if (cellEventTypes.includes('mouseleave')) {
+              onCellEvent('mouseleave', currentHoverCell.current, event);
+            }
+            currentHoverCell.current = undefined;
+          }
+        };
+        types.forEach(eventType => rootElmntRef.current?.addEventListener(eventType, handler));
+        return () =>
+          types.forEach(eventType => rootElmntRef.current?.removeEventListener(eventType, handler));
+      }
+    }, [cellEventTypes, onCellEvent, rows]);
+
     const makeRenderedCell = (r: number, c: number) => {
       const renderedCell =
         visibleCells[r][c] && children(rows[r][c], { data: rows[r][c], row: r, col: c });
@@ -653,6 +744,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
         return (
           <div
+            draggable={cellEventTypes.includes('dragstart')}
             key={`${r}-${c}`}
             style={{ width: cellWidthOverridePx, height: cellHeightOverridePx }}
             className={[`r${r} c${c}`, explicitCellClass].filter(Boolean).join(' ')}
@@ -854,29 +946,21 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       ${colStyles.join('\n')}
     `;
 
-    const onClick = useCallback(
-      (event: MouseEvent<HTMLElement>) => {
-        if (onCellClick) {
-          const cell = cellFromEvent(event.nativeEvent, rows);
-          if (cell) {
-            onCellClick(cell, event);
-          }
-        }
-      },
-      [onCellClick, rows],
-    );
-
     const hasStuckRows = stuckRowCells.length > 0;
     const hasStuckCols = stuckColCells.length > 0;
 
     return (
-      <>
+      <div
+        onScroll={event => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
         <style>{theStyle}</style>
         <div
           ref={rootElmntRef}
           style={style}
           className={[rootElmntClassName, className].filter(Boolean).join(' ')}
-          onClick={onCellClick ? onClick : undefined}
         >
           <div className="window nonSticky">
             <div ref={cellsElmntRef} className="cells">
@@ -917,12 +1001,14 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             {stuckCells}
           </div>
         </div>
-      </>
+      </div>
     );
   },
 );
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
+
+const sameCell = (c1?: Cell, c2?: Cell) => c1 && c2 && c1.col === c2.col && c1.row === c2.row;
 
 const calculateSizes = (
   itemSize: ItemSize,
@@ -1029,6 +1115,6 @@ const cellFromEvent = (event: Event, rows: unknown[][]): Cell | undefined => {
       },
       { row: -1, col: -1 },
     );
-    return { row, col, data: rows[row][col] };
+    return row === -1 || col === -1 ? undefined : { row, col, data: rows[row][col] };
   }
 };
