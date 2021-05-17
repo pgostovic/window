@@ -675,7 +675,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
      * hanlder invokation on the "current" hovered cell.
      */
     useEffect(() => {
-      if (onCellEvent) {
+      const rootElmnt = rootElmntRef.current;
+      if (onCellEvent && rootElmnt) {
         const types = new Set<EventType>(
           cellEventTypes.includes('mouseenter') || cellEventTypes.includes('mouseleave')
             ? [...cellEventTypes, 'mouseover', 'mouseleave']
@@ -713,9 +714,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             currentHoverCell.current = undefined;
           }
         };
-        types.forEach(eventType => rootElmntRef.current?.addEventListener(eventType, handler));
-        return () =>
-          types.forEach(eventType => rootElmntRef.current?.removeEventListener(eventType, handler));
+
+        types.forEach(eventType => rootElmnt.addEventListener(eventType, handler));
+        return () => types.forEach(eventType => rootElmnt.removeEventListener(eventType, handler));
       }
     }, [cellEventTypes, onCellEvent, rows]);
 
