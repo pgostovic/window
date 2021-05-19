@@ -951,12 +951,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const hasStuckCols = stuckColCells.length > 0;
 
     return (
-      <div
-        onScroll={event => {
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-      >
+      <>
         <style>{theStyle}</style>
         <div
           ref={rootElmntRef}
@@ -1002,7 +997,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             {stuckCells}
           </div>
         </div>
-      </div>
+      </>
     );
   },
 );
