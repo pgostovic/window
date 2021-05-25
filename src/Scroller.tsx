@@ -84,6 +84,12 @@ interface Props {
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   allowShowOverflow?: boolean;
+  fixedMarginContent?: {
+    top?: { height: number; node: ReactNode };
+    bottom?: { height: number; node: ReactNode };
+    left?: { width: number; node: ReactNode };
+    right?: { width: number; node: ReactNode };
+  };
   style?: CSSProperties;
   className?: string;
   cellClassName?: string | ((cell: { row: number; col: number }) => string);
@@ -129,6 +135,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       cellEventTypes = [],
       onCellEvent,
       allowShowOverflow = false,
+      fixedMarginContent,
       style,
       className,
       cellClassName,
@@ -158,6 +165,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const [rowHeightOverrides, setRowHeightOverrides] = useState<(number | undefined)[]>([]);
     const [colWidthOverrides, setColWidthOverrides] = useState<(number | undefined)[]>([]);
     const [showOverflow, setShowOverflow] = useState(false);
+
+    const padding = {
+      left: fixedMarginContent?.left?.width || 0,
+      right: fixedMarginContent?.right?.width || 0,
+      top: fixedMarginContent?.top?.height || 0,
+      bottom: fixedMarginContent?.bottom?.height || 0,
+    };
 
     if (ref) {
       ref.current = {
@@ -252,7 +266,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       if (rootElmntRef.current) {
         const { width, height } = rootElmntRef.current.getBoundingClientRect();
-        windowSizeRef.current = { width, height };
+        const effWidth = width - padding.left - padding.right;
+        const effHeight = height - padding.top - padding.bottom;
+        windowSizeRef.current = { width: effWidth, height: effHeight };
         sizeToFit.current = { width: width === 0, height: height === 0 };
       }
 
@@ -344,9 +360,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           }
           resizePidRef.current = setTimeout(() => {
             const { width, height } = rootElmnt.getBoundingClientRect();
-
-            if (width !== windowSizeRef.current.width || height !== windowSizeRef.current.height) {
-              windowSizeRef.current = { width, height };
+            const effWidth = width - padding.left - padding.right;
+            const effHeight = height - padding.top - padding.bottom;
+            if (
+              effWidth !== windowSizeRef.current.width ||
+              effHeight !== windowSizeRef.current.height
+            ) {
+              windowSizeRef.current = { width: effWidth, height: effHeight };
               reflow();
               setRenderFlag(rf => !rf);
             }
@@ -355,7 +375,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         resizeObserver.observe(rootElmnt);
         return () => resizeObserver.unobserve(rootElmnt);
       }
-    }, [setRenderFlag]);
+    }, [setRenderFlag, padding.bottom, padding.left, padding.top, padding.right]);
 
     const reflow = () => {
       const rootElmnt = rootElmntRef.current || document.querySelector(`.${rootElmntClassName}`);
@@ -642,12 +662,32 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         for (let c = fromCol; c < toCol; c += 1) {
           const span = cellSpan({ data: rows[r][c], row: r, col: c });
           if (span.rows !== 1 || span.cols !== 1) {
+            let numStickyRows = 0;
+            let numStickyCols = 0;
+
             for (let rr = 0; rr < span.rows; rr++) {
+              if (stickyRows.includes(r + rr)) {
+                numStickyRows += 1;
+              }
               for (let cc = 0; cc < span.cols; cc++) {
+                if (stickyCols.includes(c + cc)) {
+                  numStickyCols += 1;
+                }
                 if (rr !== 0 || cc !== 0) {
                   cells[r + rr][c + cc] = false;
                 }
               }
+            }
+
+            if (
+              (numStickyRows !== 0 && numStickyRows !== span.rows) ||
+              (numStickyCols !== 0 && numStickyCols !== span.cols)
+            ) {
+              throw new Error(
+                `Spanned cells may not cross sticky/non-sticky boundaries -- cell: { r:${r}, c:${c} }, stickyRows: [ ${stickyRows.join(
+                  ', ',
+                )} ],  stickyCols: [ ${stickyCols.join(', ')} ]`,
+              );
             }
           }
         }
@@ -747,7 +787,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           <div
             draggable={cellEventTypes.includes('dragstart')}
             key={`${r}-${c}`}
-            style={{ width: cellWidthOverridePx, height: cellHeightOverridePx }}
+            style={{
+              width: cellWidthOverridePx,
+              height: cellHeightOverridePx,
+            }}
             className={[`r${r} c${c}`, explicitCellClass].filter(Boolean).join(' ')}
           >
             {renderedCell}
@@ -765,6 +808,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const rowStyles: string[] = [];
     const colStyles: string[] = [];
 
+    /**
+     * Render elements and styles for non-stuck cells first.
+     */
     const renderedCells: ReactElement[] = [];
     for (let r = fromRow; r < toRow; r += 1) {
       if (!stuckRows.includes(r)) {
@@ -810,6 +856,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }
 
+    /**
+     * Next, render elements and styles for stuck rows.
+     */
     const stuckRowCells: ReactElement[] = [];
     let stuckRowTop = 0;
     stuckRows.forEach(r => {
@@ -830,6 +879,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       stuckRowTop += rowHeights[r];
     });
 
+    /**
+     * Next, render elements and styles for stuck cols.
+     */
     const stuckColCells: ReactElement[] = [];
     let stuckColLeft = 0;
     stuckCols.forEach(c => {
@@ -850,6 +902,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       stuckColLeft += colWidths[c];
     });
 
+    /**
+     * Finally, render elements and styles for stuck cells.
+     */
     const stuckCells: ReactElement[] = [];
     stuckRowTop = 0;
     stuckRows.forEach(r => {
@@ -902,26 +957,58 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         position: relative;
       }
 
+      .${rootElmntClassName} > .fixedTop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+      }
+
+      .${rootElmntClassName} > .fixedBottom {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+      }
+
+      .${rootElmntClassName} > .fixedLeft {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+      }
+
+      .${rootElmntClassName} > .fixedRight {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+      }
+
       .${rootElmntClassName} > .window {
         position: absolute;
         overflow: ${showOverflow ? 'visible' : 'hidden'};
-        top: ${px(stuckRowsHeight)};
-        left: ${px(stuckColsWidth)};
-        width: ${stuckColsWidth === 0 ? '100%' : `calc(100% - ${px(stuckColsWidth)})`};
-        height: ${stuckRowsHeight === 0 ? '100%' : `calc(100% - ${px(stuckRowsHeight)})`};
+        top: ${px(stuckRowsHeight + padding.top)};
+        left: ${px(stuckColsWidth + padding.left)};
+        right: ${px(padding.right)};
+        bottom: ${px(padding.bottom)};
       }
 
       .${rootElmntClassName} > .empty {
         display: none;
       }
 
-      .${rootElmntClassName} > .stickyRows { top: 0; height: ${px(stuckRowsHeight)}; }
-      .${rootElmntClassName} > .stickyCols { left: 0; width: ${px(stuckColsWidth)}; }
+      .${rootElmntClassName} > .stickyRows { top: ${px(padding.top)}; height: ${px(
+      stuckRowsHeight,
+    )}; }
+      .${rootElmntClassName} > .stickyCols { left: ${px(padding.left)}; width: ${px(
+      stuckColsWidth,
+    )}; }
 
       .${rootElmntClassName} > .stickyCells {
         position: absolute;
-        top: 0;
-        left: 0;
+        top: ${px(padding.top)};
+        left: ${px(padding.left)};
         width: ${px(stuckColsWidth)};
         height: ${px(stuckRowsHeight)};
       }
@@ -996,6 +1083,26 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           >
             {stuckCells}
           </div>
+          {fixedMarginContent?.top && (
+            <div className="fixedTop" style={{ height: px(fixedMarginContent.top.height) }}>
+              {fixedMarginContent.top.node}
+            </div>
+          )}
+          {fixedMarginContent?.bottom && (
+            <div className="fixedBottom" style={{ height: px(fixedMarginContent.bottom.height) }}>
+              {fixedMarginContent.bottom.node}
+            </div>
+          )}
+          {fixedMarginContent?.left && (
+            <div className="fixedLeft" style={{ width: px(fixedMarginContent.left.width) }}>
+              {fixedMarginContent.left.node}
+            </div>
+          )}
+          {fixedMarginContent?.right && (
+            <div className="fixedRight" style={{ width: px(fixedMarginContent.right.width) }}>
+              {fixedMarginContent.right.node}
+            </div>
+          )}
         </div>
       </>
     );

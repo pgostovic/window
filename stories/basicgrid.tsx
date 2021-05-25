@@ -4,7 +4,7 @@ import { Scroller } from '../src';
 
 const rows: string[][] = [];
 
-for (let r = 0; r < 1000; r++) {
+for (let r = 0; r < 100; r++) {
   const row: string[] = [];
   for (let c = 0; c < 1000; c++) {
     row.push(`${c}-${r}`);
@@ -51,16 +51,28 @@ export const BasicGrid: FC = () => (
       rows={rows}
       cellClassName="theCell"
       colWidth={c => (c === 3 ? 'natural' : 100)}
-      stickyRows={[0, 3, 10]}
+      stickyRows={[1, 3, 10]}
       stickyCols={[5, 10, 15]}
       cellSpan={({ row, col }) =>
-        row === 20 && col === 20 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
+        row === 1 && col === 20
+          ? { rows: 1, cols: 10 }
+          : row === 20 && col === 20
+          ? { rows: 3, cols: 3 }
+          : { rows: 1, cols: 1 }
       }
       cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave', 'dragstart']}
       onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
+      fixedMarginContent={{
+        top: {
+          height: 50,
+          node: <div style={{ backgroundColor: 'pink', height: '50px' }}>Bubba</div>,
+        },
+      }}
     >
       {(cell, { row, col }) =>
-        row === 20 && col === 20 ? (
+        row === 1 ? (
+          <div style={{ backgroundColor: '#eee', width: '100%', height: '100%' }}>Big Header</div>
+        ) : row === 20 && col === 20 ? (
           <div key="spanner" className="spanner">
             {cell}
           </div>
