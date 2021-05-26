@@ -90,6 +90,7 @@ interface Props {
     left?: { width: number; node: ReactNode };
     right?: { width: number; node: ReactNode };
   };
+  usePassiveListeners?: boolean;
   style?: CSSProperties;
   className?: string;
   cellClassName?: string | ((cell: { row: number; col: number }) => string);
@@ -136,6 +137,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       onCellEvent,
       allowShowOverflow = false,
       fixedMarginContent,
+      usePassiveListeners,
       style,
       className,
       cellClassName,
@@ -525,6 +527,21 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [rowOffsets, colOffsets, numRows, numCols, sortedStickyRows.join(), sortedStickyCols.join()],
     );
 
+    /**
+     * Using "passive" listeners can (apparrently) improve scrolling performance, but it removes the ability
+     * to call event.preventDefault() on wheel events. However, event.preventDefault() is needed to avoid the
+     * browser's two-finger left swipe history back behaviour.
+     *
+     * The default behaviour will be to use passive listeners only if the content is not horizontally scrollable.
+     * This default can be overridden with the `usePassiveListeners` prop.
+     *
+     * https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#improving_scrolling_performance_with_passive_listeners
+     */
+    const passive =
+      typeof usePassiveListeners === 'boolean'
+        ? usePassiveListeners
+        : totalSize.width <= windowSizeRef.current.width;
+
     useEffect(() => {
       if (freezeScroll) {
         return;
@@ -575,6 +592,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       };
 
       const onWheel = (event: WheelEvent) => {
+        if (!passive) {
+          event.preventDefault();
+        }
         setShowOverflow(allowShowOverflow && event.altKey && event.metaKey);
         scroll(event.deltaX, event.deltaY);
       };
@@ -623,7 +643,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         touchInfoRef.current = { ...touchInfo, pid };
       };
 
-      const listenerOptions = mayUsePassive ? { passive: true } : false;
+      const listenerOptions = mayUsePassive ? { passive } : false;
 
       if (source) {
         source.addEventListener('wheel', onWheel, listenerOptions);
@@ -639,7 +659,15 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           source.removeEventListener('touchend', onTouchEnd);
         }
       };
-    }, [totalSize.width, totalSize.height, maxOffset.x, maxOffset.y, scrollSpeed, freezeScroll]);
+    }, [
+      totalSize.width,
+      totalSize.height,
+      maxOffset.x,
+      maxOffset.y,
+      scrollSpeed,
+      freezeScroll,
+      passive,
+    ]);
 
     const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 

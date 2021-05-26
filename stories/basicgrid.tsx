@@ -4,7 +4,7 @@ import { Scroller } from '../src';
 
 const rows: string[][] = [];
 
-for (let r = 0; r < 100; r++) {
+for (let r = 0; r < 1000; r++) {
   const row: string[] = [];
   for (let c = 0; c < 1000; c++) {
     row.push(`${c}-${r}`);
