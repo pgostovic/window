@@ -592,7 +592,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       };
 
       const onWheel = (event: WheelEvent) => {
-        if (!passive) {
+        // Only need to prevent the default behaviour if scrolling left.
+        if (!passive && event.deltaX < 0) {
           event.preventDefault();
         }
         setShowOverflow(allowShowOverflow && event.altKey && event.metaKey);
