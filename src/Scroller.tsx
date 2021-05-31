@@ -39,9 +39,15 @@ interface FlexSize {
 }
 type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
 
-interface CellSpan {
+interface CellSpan extends Omit<DerivedCellSpan, 'rows' | 'cols'> {
+  rows: number | 'fitWindow';
+  cols: number | 'fitWindow';
+}
+
+interface DerivedCellSpan {
   rows: number;
   cols: number;
+  limitScroll?: 'h' | 'v';
 }
 
 export type EventType =
@@ -71,6 +77,8 @@ interface Props {
   cellSpan?(cell: Cell): CellSpan;
   stickyRows?: number[];
   stickyCols?: number[];
+  suppressHScrollRows?: number[];
+  suppressVScrollCols?: number[];
   initOffset?: { x: number; y: number };
   initScroll?: { row: number; col: number };
   scrollSpeed?: number;
@@ -120,9 +128,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       rows: rowsRaw,
       rowHeight = DEFAULT_ROW_HEIGHT,
       colWidth = DEFAULT_COL_WIDTH,
-      cellSpan = () => ({ rows: 1, cols: 1 }),
+      cellSpan: cellSpanRaw = (): CellSpan => ({ rows: 1, cols: 1 }),
       stickyRows = [],
       stickyCols = [],
+      suppressHScrollRows = [],
+      suppressVScrollCols = [],
       initOffset = { x: 0, y: 0 },
       initScroll,
       scrollSpeed = DEFAULT_SCROLL_SPEED,
@@ -152,6 +162,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const cellsElmntRef = createRef<HTMLDivElement>();
     const stickyRowsElmntRef = createRef<HTMLDivElement>();
     const stickyColsElmntRef = createRef<HTMLDivElement>();
+    const hScrollElmntsRef = useRef<[number, HTMLElement][]>([]);
+    const vScrollElmntsRef = useRef<[number, HTMLElement][]>([]);
     const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
     const offsetRef = useRef(initOffset);
     const rafPidRef = useRef(0);
@@ -260,6 +272,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       sortedStickyCols.map(c => colWidths[c]),
       colWidthOverrides,
     );
+
+    const stuckRows = stuckRowsRef.current;
+    const stuckCols = stuckColsRef.current;
+    const stuckRowsHeight = stuckRows.reduce((h, r) => h + rowHeights[r], 0);
+    const stuckColsWidth = stuckCols.reduce((w, c) => w + colWidths[c], 0);
 
     useEffect(() => {
       if (initScroll) {
@@ -494,6 +511,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             stickyRowsElmnt.style.transform = `translateX(${translateX - stuckColsWidth}px)`;
             stickyColsElmnt.style.transform = `translateY(${translateY - stuckRowsHeight}px)`;
 
+            hScrollElmntsRef.current.forEach(([c, hScrollElmnt]) => {
+              hScrollElmnt.style.transform = `translateX(${
+                stuckCols.includes(c) ? 0 : translateX
+              }px)`;
+            });
+
+            vScrollElmntsRef.current.forEach(([r, vScrollElmnt]) => {
+              vScrollElmnt.style.transform = `translateY(${
+                stuckRows.includes(r) ? 0 : translateY
+              }px)`;
+            });
+
             // render rows if needed
             if (
               fromRow !== renderWindow.fromRow ||
@@ -682,14 +711,54 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }, [onRenderRows, fromRow, toRow, fromCol, toCol]);
 
+    const cellSpan = (cell: Cell): DerivedCellSpan => {
+      const span = cellSpanRaw(cell);
+      if (span.cols === 'fitWindow') {
+        const winWidth = windowSizeRef.current.width;
+        span.cols = 1;
+        for (let w = colWidths[cell.col]; w < winWidth; w += colWidths[cell.col + span.cols]) {
+          span.cols += 1;
+        }
+        if (cell.col === 0) {
+          span.limitScroll = 'v';
+        }
+      }
+      if (span.rows === 'fitWindow') {
+        const winHeight = windowSizeRef.current.height;
+        span.rows = 1;
+        for (let h = rowHeights[cell.row]; h < winHeight; h += rowHeights[cell.row + span.rows]) {
+          span.rows += 1;
+        }
+        if (cell.row === 0) {
+          span.limitScroll = 'h';
+        }
+      }
+      return span as DerivedCellSpan;
+    };
+
+    /**
+     * Calculate which cells should or should not be visible/rendered based on cell spans.
+     * For example, if [5, 5] has a col span of 2, then [5, 6] will *not* be visible because
+     * [5, 5] will occupy the space where [5, 6] would be rendered.
+     */
     const visibleCells = useMemo(() => {
       const cells: boolean[][] = new Array(numRows)
         .fill(null)
         .map(() => new Array(numCols).fill(true));
 
-      for (let r = fromRow; r < toRow; r += 1) {
-        for (let c = fromCol; c < toCol; c += 1) {
-          const span = cellSpan({ data: rows[r][c], row: r, col: c });
+      const visibleRows = new Array(toRow - fromRow)
+        .fill(0)
+        .map((_, i) => i + fromRow)
+        .concat(stuckRows);
+      const visibleCols = new Array(toCol - fromCol)
+        .fill(0)
+        .map((_, i) => i + fromCol)
+        .concat(stuckCols);
+
+      visibleRows.forEach(r => {
+        visibleCols.forEach(c => {
+          const cell = { data: rows[r][c], row: r, col: c };
+          const span = cellSpan(cell);
           if (span.rows !== 1 || span.cols !== 1) {
             let numStickyRows = 0;
             let numStickyCols = 0;
@@ -702,15 +771,16 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 if (stickyCols.includes(c + cc)) {
                   numStickyCols += 1;
                 }
-                if (rr !== 0 || cc !== 0) {
-                  cells[r + rr][c + cc] = false;
-                }
+                cells[r + rr][c + cc] = rr === 0 && cc === 0;
               }
             }
 
+            const hScrollSuppressed = suppressHScrollRows.includes(r);
+            const vScrollSuppressed = suppressVScrollCols.includes(c);
+
             if (
-              (numStickyRows !== 0 && numStickyRows !== span.rows) ||
-              (numStickyCols !== 0 && numStickyCols !== span.cols)
+              (numStickyRows !== 0 && numStickyRows !== span.rows && !vScrollSuppressed) ||
+              (numStickyCols !== 0 && numStickyCols !== span.cols && !hScrollSuppressed)
             ) {
               throw new Error(
                 `Spanned cells may not cross sticky/non-sticky boundaries -- cell: { r:${r}, c:${c} }, stickyRows: [ ${stickyRows.join(
@@ -719,10 +789,46 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               );
             }
           }
-        }
-      }
+        });
+      });
       return cells;
-    }, [rows, numCols, numRows, fromRow, toRow, fromCol, toCol]);
+    }, [
+      rows,
+      numCols,
+      numRows,
+      fromRow,
+      toRow,
+      fromCol,
+      toCol,
+      stuckRows.join(),
+      stuckCols.join(),
+    ]);
+
+    useEffect(() => {
+      vScrollElmntsRef.current = suppressHScrollRows.reduce(
+        (elmnts, r) =>
+          stuckRows.includes(r)
+            ? elmnts
+            : elmnts.concat(
+                Array.prototype.slice
+                  .call(document.querySelectorAll(`.r${r}`))
+                  .map(elmnt => [r, elmnt]),
+              ),
+        [] as [number, HTMLElement][],
+      );
+
+      hScrollElmntsRef.current = suppressVScrollCols.reduce(
+        (elmnts, c) =>
+          stuckCols.includes(c)
+            ? elmnts
+            : elmnts.concat(
+                Array.prototype.slice
+                  .call(document.querySelectorAll(`.c${c}`))
+                  .map(elmnt => [c, elmnt]),
+              ),
+        [] as [number, HTMLElement][],
+      );
+    });
 
     const currentHoverCell = useRef<Cell>();
 
@@ -803,7 +909,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const cellHeightOverridePx =
           span.rows === 1
             ? undefined
-            : px(rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0));
+            : rowHeights.slice(r, r + span.rows).reduce((ch, h) => ch + h, 0);
 
         const explicitCellClass =
           typeof cellClassName === 'string'
@@ -814,7 +920,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
         return (
           <div
-            draggable={cellEventTypes.includes('dragstart')}
+            draggable={cellEventTypes.includes('dragstart') ? true : undefined}
             key={`${r}-${c}`}
             style={{
               width: cellWidthOverridePx,
@@ -829,34 +935,31 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       return undefined;
     };
 
-    const stuckRows = stuckRowsRef.current;
-    const stuckCols = stuckColsRef.current;
-    const stuckRowsHeight = stuckRows.reduce((h, r) => h + rowHeights[r], 0);
-    const stuckColsWidth = stuckCols.reduce((w, c) => w + colWidths[c], 0);
-
-    const rowStyles: string[] = [];
-    const colStyles: string[] = [];
+    const cellStyles: string[] = [];
 
     /**
      * Render elements and styles for non-stuck cells first.
      */
     const renderedCells: ReactElement[] = [];
     for (let r = fromRow; r < toRow; r += 1) {
-      if (!stuckRows.includes(r)) {
+      if (!stuckRows.includes(r) && !suppressHScrollRows.includes(r)) {
         const rowTop = rowOffsets[r] - rowOffsets[fromRow];
         const height = rowHeights[r];
         const isNatural = typeof rowHeight === 'function' && rowHeight(r) === 'natural';
         if (isNatural) {
-          rowStyles.push(`.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; }`);
+          cellStyles.push(
+            `.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; }`,
+          );
         } else {
-          rowStyles.push(
+          cellStyles.push(
             `.${rootElmntClassName} > .window > div > .r${r} { top: ${px(rowTop)}; height: ${px(
               height,
             )}; }`,
           );
         }
+
         for (let c = fromCol; c < toCol; c += 1) {
-          if (!stuckCols.includes(c)) {
+          if (!stuckCols.includes(c) && !suppressVScrollCols.includes(c)) {
             const cell = makeRenderedCell(r, c);
             if (cell) {
               renderedCells.push(cell);
@@ -872,11 +975,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const width = colWidths[c];
         const isNatural = typeof colWidth === 'function' && colWidth(c) === 'natural';
         if (isNatural) {
-          colStyles.push(
+          cellStyles.push(
             `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; }`,
           );
         } else {
-          colStyles.push(
+          cellStyles.push(
             `.${rootElmntClassName} > .window > div > .c${c} { left: ${px(colLeft)}; width: ${px(
               width,
             )}; }`,
@@ -892,20 +995,22 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     let stuckRowTop = 0;
     stuckRows.forEach(r => {
       const rowHeight = rowHeights[r];
-      rowStyles.push(
-        `.${rootElmntClassName} > .stickyRows > div > .r${r} { top: ${px(
-          stuckRowTop,
-        )}; height: ${px(rowHeight)}; }`,
-      );
-      for (let c = fromCol; c < toCol; c += 1) {
-        if (!stuckCols.includes(c)) {
-          const cell = makeRenderedCell(r, c);
-          if (cell) {
-            stuckRowCells.push(cell);
+      if (!suppressHScrollRows.includes(r)) {
+        cellStyles.push(
+          `.${rootElmntClassName} > .stickyRows > div > .r${r} { top: ${px(
+            stuckRowTop,
+          )}; height: ${px(rowHeight)}; }`,
+        );
+        for (let c = fromCol; c < toCol; c += 1) {
+          if (!stuckCols.includes(c) && !suppressVScrollCols.includes(c)) {
+            const cell = makeRenderedCell(r, c);
+            if (cell) {
+              stuckRowCells.push(cell);
+            }
           }
         }
       }
-      stuckRowTop += rowHeights[r];
+      stuckRowTop += rowHeight;
     });
 
     /**
@@ -915,43 +1020,47 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     let stuckColLeft = 0;
     stuckCols.forEach(c => {
       const colWidth = colWidths[c];
-      colStyles.push(
-        `.${rootElmntClassName} > .stickyCols > div > .c${c} { left: ${px(
-          stuckColLeft,
-        )}; width: ${px(colWidth)}; }`,
-      );
-      for (let r = fromRow; r < toRow; r += 1) {
-        if (!stuckRows.includes(r)) {
-          const cell = makeRenderedCell(r, c);
-          if (cell) {
-            stuckColCells.push(cell);
+      if (!suppressVScrollCols.includes(c)) {
+        cellStyles.push(
+          `.${rootElmntClassName} > .stickyCols > div > .c${c} { left: ${px(
+            stuckColLeft,
+          )}; width: ${px(colWidth)}; }`,
+        );
+        for (let r = fromRow; r < toRow; r += 1) {
+          if (!stuckRows.includes(r) && !suppressHScrollRows.includes(r)) {
+            const cell = makeRenderedCell(r, c);
+            if (cell) {
+              stuckColCells.push(cell);
+            }
           }
         }
       }
-      stuckColLeft += colWidths[c];
+      stuckColLeft += colWidth;
     });
 
     /**
-     * Finally, render elements and styles for stuck cells.
+     * Render elements and styles for stuck cells.
      */
     const stuckCells: ReactElement[] = [];
     stuckRowTop = 0;
-    stuckRows.forEach(r => {
-      stuckColLeft = 0;
-      stuckCols.forEach(c => {
-        const cell = makeRenderedCell(r, c);
-        if (cell) {
-          stuckCells.push(cell);
-        }
-        stuckColLeft += colWidths[c];
+    stuckRows
+      .filter(r => !suppressHScrollRows.includes(r))
+      .forEach(r => {
+        stuckCols
+          .filter(c => !suppressVScrollCols.includes(c))
+          .forEach(c => {
+            const cell = makeRenderedCell(r, c);
+            if (cell) {
+              stuckCells.push(cell);
+            }
+          });
+        stuckRowTop += rowHeights[r];
       });
-      stuckRowTop += rowHeights[r];
-    });
 
     stuckRowTop = 0;
     stuckRows.forEach(r => {
       const rowHeight = rowHeights[r];
-      rowStyles.push(
+      cellStyles.push(
         `.${rootElmntClassName} > .stickyCells > .r${r} { top: ${px(stuckRowTop)}; height: ${px(
           rowHeight,
         )}; }`,
@@ -962,12 +1071,76 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     stuckColLeft = 0;
     stuckCols.forEach(c => {
       const colWidth = colWidths[c];
-      rowStyles.push(
+      cellStyles.push(
         `.${rootElmntClassName} > .stickyCells > .c${c} { left: ${px(stuckColLeft)}; width: ${px(
           colWidth,
         )}; }`,
       );
       stuckColLeft += colWidth;
+    });
+
+    /**
+     * Suppressed scroll stuff
+     */
+    const suppressHScrollCells: ReactElement[] = [];
+    suppressHScrollRows.forEach(r => {
+      let c = 0;
+      while (colOffsets[c] + colWidths[c] < windowSizeRef.current.width) {
+        const span = cellSpan({ row: r, col: c, data: undefined });
+        const cell = makeRenderedCell(r, c);
+        const colOffset = colOffsets[c];
+        if (cell) {
+          suppressHScrollCells.push(cell);
+
+          let top = rowOffsets[r] - rowOffsets[fromRow];
+          if (stuckRows.includes(r)) {
+            top = stuckRows.slice(0, stuckRows.indexOf(r)).reduce((t, sr) => t + rowHeights[sr], 0);
+          }
+
+          cellStyles.push(
+            `.${rootElmntClassName} > .r${r}.c${c} { position: absolute; left: ${px(
+              colOffset,
+            )}; top: ${px(padding.top + top)}; width: ${px(
+              colWidths[c],
+            )}; max-width: 100%; height: ${px(rowHeights[r])}; box-sizing: border-box; z-index: ${
+              stuckRows.includes(r) ? 1 : 0
+            }; }`,
+          );
+        }
+        c += span.cols;
+      }
+    });
+
+    /**
+     * Suppressed scroll stuff
+     */
+    const suppressVScrollCells: ReactElement[] = [];
+    suppressVScrollCols.forEach(c => {
+      let r = 0;
+      while (rowOffsets[r] + rowHeights[r] < windowSizeRef.current.height) {
+        const span = cellSpan({ row: r, col: c, data: undefined });
+        const cell = makeRenderedCell(r, c);
+        const rowOffset = rowOffsets[r];
+        if (cell) {
+          suppressVScrollCells.push(cell);
+
+          let left = colOffsets[c] - colOffsets[fromCol];
+          if (stuckCols.includes(c)) {
+            left = stuckCols.slice(0, stuckCols.indexOf(c)).reduce((l, sc) => l + colWidths[sc], 0);
+          }
+
+          cellStyles.push(
+            `.${rootElmntClassName} > .r${r}.c${c} { position: absolute; top: ${px(
+              rowOffset,
+            )}; left: ${px(padding.left + left)}; width: ${px(
+              colWidths[c],
+            )}; max-width: 100%; height: ${px(rowHeights[r])}; box-sizing: border-box; z-index: ${
+              stuckCols.includes(c) ? 1 : 0
+            }; }`,
+          );
+        }
+        r += span.cols;
+      }
     });
 
     const naturalHeight =
@@ -984,6 +1157,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         ${naturalWidth ? `width: ${naturalWidth}` : ''};
         ${naturalHeight ? `height: ${naturalHeight}` : ''};
         position: relative;
+        overflow: hidden;
       }
 
       .${rootElmntClassName} > .fixedTop {
@@ -1029,10 +1203,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       .${rootElmntClassName} > .stickyRows { top: ${px(padding.top)}; height: ${px(
       stuckRowsHeight,
-    )}; }
+    )}; background: inherit; }
       .${rootElmntClassName} > .stickyCols { left: ${px(padding.left)}; width: ${px(
       stuckColsWidth,
-    )}; }
+    )}; background: inherit; }
 
       .${rootElmntClassName} > .stickyCells {
         position: absolute;
@@ -1040,6 +1214,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         left: ${px(padding.left)};
         width: ${px(stuckColsWidth)};
         height: ${px(stuckRowsHeight)};
+        background: inherit;
       }
 
       .${rootElmntClassName} > .window > div
@@ -1059,12 +1234,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         position: absolute;
       }
 
-      ${rowStyles.join('\n')}
-      ${colStyles.join('\n')}
+      ${cellStyles.join('\n')}
     `;
 
-    const hasStuckRows = stuckRowCells.length > 0;
-    const hasStuckCols = stuckColCells.length > 0;
+    const hasStuckRows = stuckRows.length > 0;
+    const hasStuckCols = stuckCols.length > 0;
 
     return (
       <>
@@ -1081,22 +1255,25 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           </div>
 
           <div
-            className={[stickyClassName, 'window', 'stickyRows', !hasStuckRows && 'empty']
-              .filter(Boolean)
-              .join(' ')}
-          >
-            <div ref={stickyRowsElmntRef} className="cells">
-              {stuckRowCells}
-            </div>
-          </div>
-
-          <div
             className={[stickyClassName, 'window', 'stickyCols', !hasStuckCols && 'empty']
               .filter(Boolean)
               .join(' ')}
           >
             <div ref={stickyColsElmntRef} className="cells">
               {stuckColCells}
+            </div>
+          </div>
+
+          {suppressVScrollCells}
+          {suppressHScrollCells}
+
+          <div
+            className={[stickyClassName, 'window', 'stickyRows', !hasStuckRows && 'empty']
+              .filter(Boolean)
+              .join(' ')}
+          >
+            <div ref={stickyRowsElmntRef} className="cells">
+              {stuckRowCells}
             </div>
           </div>
 
@@ -1112,6 +1289,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           >
             {stuckCells}
           </div>
+
           {fixedMarginContent?.top && (
             <div className="fixedTop" style={{ height: px(fixedMarginContent.top.height) }}>
               {fixedMarginContent.top.node}

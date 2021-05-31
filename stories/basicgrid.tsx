@@ -44,6 +44,106 @@ const theStyle = `
 export const BasicGrid: FC = () => (
   <>
     <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName="theCell"
+    />
+  </>
+);
+
+export const StickyRows: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName="theCell"
+      stickyRows={[5, 10]}
+    />
+  </>
+);
+
+export const StickyCols: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName="theCell"
+      stickyCols={[5, 10]}
+    />
+  </>
+);
+
+export const StickyRowsAndCols: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName="theCell"
+      stickyRows={[5, 10]}
+      stickyCols={[5, 10]}
+    />
+  </>
+);
+
+export const CellSpan: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
+      cellSpan={({ row, col }) =>
+        row === 5 && col === 5 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
+      }
+    />
+  </>
+);
+
+export const CellSpanFitWindow: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
+      cellSpan={({ row, col }) =>
+        row === 5 && col === 5 ? { rows: 1, cols: 'fitWindow' } : { rows: 1, cols: 1 }
+      }
+    />
+  </>
+);
+
+export const SuppressHorizontalScroll: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={({ row }) => (row === 5 ? 'theCell spanner' : 'theCell')}
+      suppressHScrollRows={[5]}
+    />
+  </>
+);
+
+export const SuppressVerticalScroll: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={({ col }) => (col === 5 ? 'theCell spanner' : 'theCell')}
+      suppressVScrollCols={[5]}
+    />
+  </>
+);
+
+export const GridTheWorks: FC = () => (
+  <>
+    <style>{theStyle}</style>
     <p>Hold ALT-CMD while scrolling to show the window overflow.</p>
     <Scroller
       allowShowOverflow
@@ -51,16 +151,19 @@ export const BasicGrid: FC = () => (
       rows={rows}
       cellClassName="theCell"
       colWidth={c => (c === 3 ? 'natural' : 100)}
-      stickyRows={[1, 3, 10]}
-      stickyCols={[5, 10, 15]}
+      stickyRows={[1, 3, 17]}
+      stickyCols={[0, 5, 10, 15]}
+      suppressHScrollRows={[10, 11]}
       cellSpan={({ row, col }) =>
         row === 1 && col === 20
           ? { rows: 1, cols: 10 }
+          : row === 10 && col === 0
+          ? { rows: 1, cols: 'fitWindow' }
           : row === 20 && col === 20
           ? { rows: 3, cols: 3 }
           : { rows: 1, cols: 1 }
       }
-      cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave', 'dragstart']}
+      cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
       onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
       fixedMarginContent={{
         top: {
@@ -72,7 +175,7 @@ export const BasicGrid: FC = () => (
       {(cell, { row, col }) =>
         row === 1 ? (
           <div style={{ backgroundColor: '#eee', width: '100%', height: '100%' }}>Big Header</div>
-        ) : row === 20 && col === 20 ? (
+        ) : (row === 20 && col === 20) || (row === 10 && col === 0) ? (
           <div key="spanner" className="spanner">
             {cell}
           </div>
