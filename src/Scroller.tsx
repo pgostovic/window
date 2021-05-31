@@ -341,6 +341,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         rowHeightOverrides.slice(fromRow, toRow).join()
       ) {
         setRowHeightOverrides(heightOverrides);
+        reflow();
       }
     });
 
