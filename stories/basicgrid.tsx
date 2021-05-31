@@ -137,6 +137,19 @@ export const SuppressVerticalScroll: FC = () => (
   </>
 );
 
+export const GridWithEvents: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
+      onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
+      arrowScrollAmount={50}
+    />
+  </>
+);
+
 export const GridTheWorks: FC = () => (
   <>
     <style>{theStyle}</style>
@@ -155,8 +168,6 @@ export const GridTheWorks: FC = () => (
         { row: 10, col: 0, rows: 1, cols: 'fitWindow' },
         { row: 20, col: 20, rows: 3, cols: 3 },
       ]}
-      cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
-      onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
       fixedMarginContent={{
         top: {
           height: 50,

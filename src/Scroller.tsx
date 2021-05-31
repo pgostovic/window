@@ -93,6 +93,7 @@ interface Props {
   onScrollStop?(offset: { x: number; y: number }): void;
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
+  arrowScrollAmount?: number | { x: number; y: number };
   allowShowOverflow?: boolean;
   fixedMarginContent?: {
     top?: { height: number; node: ReactNode };
@@ -147,6 +148,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       onScrollStop,
       cellEventTypes = [],
       onCellEvent,
+      arrowScrollAmount,
       allowShowOverflow = false,
       fixedMarginContent,
       usePassiveListeners,
@@ -189,42 +191,44 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       bottom: fixedMarginContent?.bottom?.height || 0,
     };
 
-    if (ref) {
-      ref.current = {
-        scrollTo(...args: unknown[]) {
-          if (args.length === 1) {
-            const [cell] = args;
-            if (numCols === 1) {
-              const row = rows.findIndex(cells => cells.includes(cell));
-              if (row !== -1) {
-                const col = rows[row].indexOf(cell);
-                if (col !== -1) {
-                  this.scrollTo(row, col);
-                }
+    const scrollerRef: ScrollerRef = {
+      scrollTo(...args: unknown[]) {
+        if (args.length === 1) {
+          const [cell] = args;
+          if (numCols === 1) {
+            const row = rows.findIndex(cells => cells.includes(cell));
+            if (row !== -1) {
+              const col = rows[row].indexOf(cell);
+              if (col !== -1) {
+                this.scrollTo(row, col);
               }
             }
-          } else {
-            const [row, col] = args as [number, number];
-            this.setOffset({ x: colOffsets[col], y: rowOffsets[row] });
           }
-        },
-        getOffset() {
-          return offsetRef.current;
-        },
-        setOffset(offset) {
-          const cellsElmnt =
-            cellsElmntRef.current ||
-            document.querySelector(`.${rootElmntClassName} > .nonSticky > div`);
-          const stickyRowsElmnt =
-            stickyRowsElmntRef.current ||
-            document.querySelector(`.${rootElmntClassName} > .stickyRows > div`);
-          const stickyColsElmnt =
-            stickyColsElmntRef.current ||
-            document.querySelector(`.${rootElmntClassName} > .stickyCols > div`);
+        } else {
+          const [row, col] = args as [number, number];
+          this.setOffset({ x: colOffsets[col], y: rowOffsets[row] });
+        }
+      },
+      getOffset() {
+        return offsetRef.current;
+      },
+      setOffset(offset) {
+        const cellsElmnt =
+          cellsElmntRef.current ||
+          document.querySelector(`.${rootElmntClassName} > .nonSticky > div`);
+        const stickyRowsElmnt =
+          stickyRowsElmntRef.current ||
+          document.querySelector(`.${rootElmntClassName} > .stickyRows > div`);
+        const stickyColsElmnt =
+          stickyColsElmntRef.current ||
+          document.querySelector(`.${rootElmntClassName} > .stickyCols > div`);
 
-          setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offset);
-        },
-      };
+        setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offset);
+      },
+    };
+
+    if (ref) {
+      ref.current = scrollerRef;
     }
 
     const numRows = rows.length;
@@ -295,6 +299,39 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       reflow();
     }, []);
+
+    useEffect(() => {
+      if (arrowScrollAmount && rootElmntRef.current) {
+        const yScrollAmount =
+          typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
+        const xScrollAmount =
+          typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
+        const handleKey = (event: KeyboardEvent) => {
+          const currentOffset = scrollerRef.getOffset();
+          switch (event.key) {
+            case 'ArrowUp':
+              scrollerRef.setOffset({ ...currentOffset, y: currentOffset.y - yScrollAmount });
+              break;
+            case 'ArrowDown':
+              scrollerRef.setOffset({ ...currentOffset, y: currentOffset.y + yScrollAmount });
+              break;
+            case 'ArrowLeft':
+              scrollerRef.setOffset({ ...currentOffset, x: currentOffset.x - xScrollAmount });
+              break;
+            case 'ArrowRight':
+              scrollerRef.setOffset({ ...currentOffset, x: currentOffset.x + xScrollAmount });
+              break;
+            default:
+          }
+        };
+        rootElmntRef.current.addEventListener('keydown', handleKey);
+        return () => {
+          if (rootElmntRef.current) {
+            rootElmntRef.current.removeEventListener('keydown', handleKey);
+          }
+        };
+      }
+    }, [arrowScrollAmount]);
 
     useEffect(() => {
       // Do a reflow if the content has grown from being wholy contained inside the window
@@ -421,9 +458,14 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         cellsElmnt: HTMLDivElement | null,
         stickyRowsElmnt: HTMLDivElement | null,
         stickyColsElmnt: HTMLDivElement | null,
-        offset: { x: number; y: number },
+        off: { x: number; y: number },
         force = false,
       ) => {
+        const offset = {
+          x: Math.min(maxOffset.x, Math.max(0, off.x)),
+          y: Math.min(maxOffset.y, Math.max(0, off.y)),
+        };
+
         if (
           cellsElmnt &&
           stickyRowsElmnt &&
@@ -1267,6 +1309,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           ref={rootElmntRef}
           style={style}
           className={[rootElmntClassName, className].filter(Boolean).join(' ')}
+          tabIndex={arrowScrollAmount ? 0 : undefined}
         >
           <div className="window nonSticky">
             <div ref={cellsElmntRef} className="cells">
