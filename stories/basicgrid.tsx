@@ -96,9 +96,7 @@ export const CellSpan: FC = () => (
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
-      cellSpan={({ row, col }) =>
-        row === 5 && col === 5 ? { rows: 3, cols: 3 } : { rows: 1, cols: 1 }
-      }
+      cellSpans={[{ row: 5, col: 5, rows: 3, cols: 3 }]}
     />
   </>
 );
@@ -110,9 +108,7 @@ export const CellSpanFitWindow: FC = () => (
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
-      cellSpan={({ row, col }) =>
-        row === 5 && col === 5 ? { rows: 1, cols: 'fitWindow' } : { rows: 1, cols: 1 }
-      }
+      cellSpans={[{ row: 5, col: 5, rows: 1, cols: 'fitWindow' }]}
     />
   </>
 );
@@ -154,15 +150,11 @@ export const GridTheWorks: FC = () => (
       stickyRows={[1, 3, 17]}
       stickyCols={[0, 5, 10, 15]}
       suppressHScrollRows={[10, 11]}
-      cellSpan={({ row, col }) =>
-        row === 1 && col === 20
-          ? { rows: 1, cols: 10 }
-          : row === 10 && col === 0
-          ? { rows: 1, cols: 'fitWindow' }
-          : row === 20 && col === 20
-          ? { rows: 3, cols: 3 }
-          : { rows: 1, cols: 1 }
-      }
+      cellSpans={[
+        { row: 1, col: 20, rows: 1, cols: 10 },
+        { row: 10, col: 0, rows: 1, cols: 'fitWindow' },
+        { row: 20, col: 20, rows: 3, cols: 3 },
+      ]}
       cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
       onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
       fixedMarginContent={{

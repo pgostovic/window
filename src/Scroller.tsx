@@ -45,6 +45,8 @@ interface CellSpan extends Omit<DerivedCellSpan, 'rows' | 'cols'> {
 }
 
 interface DerivedCellSpan {
+  row: number;
+  col: number;
   rows: number;
   cols: number;
   limitScroll?: 'h' | 'v';
@@ -74,7 +76,7 @@ interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
   colWidth?: ItemSize;
-  cellSpan?(cell: Cell): CellSpan;
+  cellSpans?: CellSpan[];
   stickyRows?: number[];
   stickyCols?: number[];
   suppressHScrollRows?: number[];
@@ -128,7 +130,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       rows: rowsRaw,
       rowHeight = DEFAULT_ROW_HEIGHT,
       colWidth = DEFAULT_COL_WIDTH,
-      cellSpan: cellSpanRaw = (): CellSpan => ({ rows: 1, cols: 1 }),
+      cellSpans: cellSpansRaw = [],
       stickyRows = [],
       stickyCols = [],
       suppressHScrollRows = [],
@@ -711,30 +713,38 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }, [onRenderRows, fromRow, toRow, fromCol, toCol]);
 
-    const cellSpan = (cell: Cell): DerivedCellSpan => {
-      const span = cellSpanRaw(cell);
+    const cellSpans = cellSpansRaw.map(s => {
+      const span = { ...s };
       if (span.cols === 'fitWindow') {
         const winWidth = windowSizeRef.current.width;
         span.cols = 1;
-        for (let w = colWidths[cell.col]; w < winWidth; w += colWidths[cell.col + span.cols]) {
+        for (let w = colWidths[span.col]; w < winWidth; w += colWidths[span.col + span.cols]) {
           span.cols += 1;
         }
-        if (cell.col === 0) {
+        if (span.col === 0) {
           span.limitScroll = 'v';
         }
       }
       if (span.rows === 'fitWindow') {
         const winHeight = windowSizeRef.current.height;
         span.rows = 1;
-        for (let h = rowHeights[cell.row]; h < winHeight; h += rowHeights[cell.row + span.rows]) {
+        for (let h = rowHeights[span.row]; h < winHeight; h += rowHeights[span.row + span.rows]) {
           span.rows += 1;
         }
-        if (cell.row === 0) {
+        if (span.row === 0) {
           span.limitScroll = 'h';
         }
       }
       return span as DerivedCellSpan;
-    };
+    });
+
+    const cellSpan = ({ row, col }: Cell): DerivedCellSpan =>
+      cellSpans.find(span => span.col === col && span.row === row) || {
+        row,
+        col,
+        rows: 1,
+        cols: 1,
+      };
 
     /**
      * Calculate which cells should or should not be visible/rendered based on cell spans.
@@ -934,6 +944,15 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
       return undefined;
     };
+
+    /**
+     * TODO: refactor cell rendering and style
+     *
+     * At the moment, determining which cells should be renderd is only based on the
+     * the cells' coordinates relative to the render window boundaries. This doesn't
+     * properly account for cell span. For example, a cell's coordinates could be
+     * outside of the render but some of its span could still be within the render window.
+     */
 
     const cellStyles: string[] = [];
 
