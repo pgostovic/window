@@ -245,14 +245,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height, rowHeightOverrides),
       [rows, rowHeight, windowSizeRef.current.height, rowHeightOverrides],
     );
+
     const rowOffsets = useMemo(() => calculateOffsets(rowHeights, rowHeightOverrides), [
       rowHeights,
       rowHeightOverrides,
     ]);
+
     const colWidths = useMemo(
       () => calculateSizes(colWidth, numCols, windowSizeRef.current.width, colWidthOverrides),
       [rows, colWidth, windowSizeRef.current.width, colWidthOverrides],
     );
+
     const colOffsets = useMemo(() => calculateOffsets(colWidths, colWidthOverrides), [
       colWidths,
       colWidthOverrides,
@@ -301,7 +304,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     }, []);
 
     useEffect(() => {
-      if (arrowScrollAmount && rootElmntRef.current) {
+      const rootElmnt = rootElmntRef.current;
+      if (arrowScrollAmount && rootElmnt) {
         const yScrollAmount =
           typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
         const xScrollAmount =
@@ -324,14 +328,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             default:
           }
         };
-        rootElmntRef.current.addEventListener('keydown', handleKey);
+        rootElmnt.addEventListener('keydown', handleKey);
         return () => {
-          if (rootElmntRef.current) {
-            rootElmntRef.current.removeEventListener('keydown', handleKey);
-          }
+          rootElmnt.removeEventListener('keydown', handleKey);
         };
       }
-    }, [arrowScrollAmount]);
+    }, [arrowScrollAmount, maxOffset.x, maxOffset.y]);
 
     useEffect(() => {
       // Do a reflow if the content has grown from being wholy contained inside the window

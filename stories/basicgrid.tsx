@@ -4,9 +4,9 @@ import { Scroller } from '../src';
 
 const rows: string[][] = [];
 
-for (let r = 0; r < 1000; r++) {
+for (let r = 0; r < 100; r++) {
   const row: string[] = [];
-  for (let c = 0; c < 1000; c++) {
+  for (let c = 0; c < 100; c++) {
     row.push(`${c}-${r}`);
   }
   rows.push(row);
@@ -145,6 +145,16 @@ export const GridWithEvents: FC = () => (
       rows={rows}
       cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
       onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
+    />
+  </>
+);
+
+export const GridWithArrowScroll: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
       arrowScrollAmount={50}
     />
   </>
