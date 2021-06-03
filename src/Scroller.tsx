@@ -611,6 +611,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     useEffect(() => {
       const evtSrc = eventSource || eventSourceRef?.current;
       if (evtSrc) {
+        if (evtSrc === window) {
+          isAncestorEventSourceRef.current = true;
+          return;
+        }
+
         let elmnt: HTMLElement | null = rootElmntRef.current;
         while (elmnt) {
           if (elmnt === evtSrc) {
