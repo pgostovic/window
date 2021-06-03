@@ -113,6 +113,7 @@ export interface ScrollerRef {
   scrollTo(cell: unknown): void;
   scrollTo(row: number, column: number): void;
   getOffset(): { x: number; y: number };
+  getMaxOffset(): { x: number; y: number };
   setOffset(offset: { x: number; y: number }): void;
 }
 
@@ -169,6 +170,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const hScrollElmntsRef = useRef<[number, HTMLElement][]>([]);
     const vScrollElmntsRef = useRef<[number, HTMLElement][]>([]);
     const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
+    const isAncestorEventSourceRef = useRef(false);
     const offsetRef = useRef(initOffset);
     const rafPidRef = useRef(0);
     const scrollPidRef = useRef<NodeJS.Timeout>();
@@ -211,6 +213,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       },
       getOffset() {
         return offsetRef.current;
+      },
+      getMaxOffset() {
+        return maxOffset;
       },
       setOffset(offset) {
         const cellsElmnt =
@@ -603,6 +608,21 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [rowOffsets, colOffsets, numRows, numCols, sortedStickyRows.join(), sortedStickyCols.join()],
     );
 
+    useEffect(() => {
+      const evtSrc = eventSource || eventSourceRef?.current;
+      if (evtSrc) {
+        let elmnt: HTMLElement | null = rootElmntRef.current;
+        while (elmnt) {
+          if (elmnt === evtSrc) {
+            isAncestorEventSourceRef.current = true;
+            return;
+          }
+          elmnt = elmnt.parentElement;
+        }
+      }
+      isAncestorEventSourceRef.current = false;
+    }, [eventSource, eventSourceRef]);
+
     /**
      * Using "passive" listeners can (apparrently) improve scrolling performance, but it removes the ability
      * to call event.preventDefault() on wheel events. However, event.preventDefault() is needed to avoid the
@@ -616,7 +636,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const passive =
       typeof usePassiveListeners === 'boolean'
         ? usePassiveListeners
-        : totalSize.width <= windowSizeRef.current.width;
+        : totalSize.width <= windowSizeRef.current.width && !isAncestorEventSourceRef.current;
 
     useEffect(() => {
       if (freezeScroll) {
@@ -630,6 +650,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       const cellsElmnt = cellsElmntRef.current;
       const stickyRowsElmnt = stickyRowsElmntRef.current;
       const stickyColsElmnt = stickyColsElmntRef.current;
+      const rootElmnt = rootElmntRef.current;
 
       const scroll = (deltaX: number, deltaY: number) => {
         // Don't allow scrolling if grid fits inside the window.
@@ -640,30 +661,44 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           return;
         }
 
-        const effectiveDeltaX = sizeToFit.current.width ? 0 : deltaX;
-        const effectiveDeltaY = sizeToFit.current.height ? 0 : deltaY;
+        if (rootElmnt) {
+          const { bottom, top } = rootElmnt.getBoundingClientRect();
+          const isBottomVisible = bottom <= window.innerHeight;
+          const isTopVisible = top > 0;
+          const effectiveDeltaX = sizeToFit.current.width ? 0 : deltaX;
+          const effectiveDeltaY =
+            sizeToFit.current.height ||
+            !((deltaY > 0 && isBottomVisible) || (deltaY < 0 && isTopVisible))
+              ? 0
+              : deltaY;
 
-        const offset = {
-          x: Math.min(
-            maxOffset.x,
-            Math.max(0, offsetRef.current.x + effectiveDeltaX * scrollSpeed),
-          ),
-          y: Math.min(
-            maxOffset.y,
-            Math.max(0, offsetRef.current.y + effectiveDeltaY * scrollSpeed),
-          ),
-        };
+          const offset = {
+            x: Math.min(
+              maxOffset.x,
+              Math.max(0, offsetRef.current.x + effectiveDeltaX * scrollSpeed),
+            ),
+            y: Math.min(
+              maxOffset.y,
+              Math.max(0, offsetRef.current.y + effectiveDeltaY * scrollSpeed),
+            ),
+          };
 
-        if (setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offset)) {
-          if (onScrollStop) {
-            if (scrollPidRef.current) {
-              clearTimeout(scrollPidRef.current);
-              scrollPidRef.current = undefined;
+          if (setOffset(cellsElmnt, stickyRowsElmnt, stickyColsElmnt, offset)) {
+            if (onScrollStop) {
+              if (scrollPidRef.current) {
+                clearTimeout(scrollPidRef.current);
+                scrollPidRef.current = undefined;
+              }
+              scrollPidRef.current = setTimeout(() => {
+                onScrollStop(offsetRef.current);
+              }, 200);
             }
-            scrollPidRef.current = setTimeout(() => {
-              onScrollStop(offsetRef.current);
-            }, 200);
           }
+
+          if (!passive && deltaY < 0 && scrollerRef.getOffset().y > 0 && isTopVisible) {
+            return false;
+          }
+          return true;
         }
       };
 
@@ -673,7 +708,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           event.preventDefault();
         }
         setShowOverflow(allowShowOverflow && event.altKey && event.metaKey);
-        scroll(event.deltaX, event.deltaY);
+        if (!scroll(event.deltaX, event.deltaY)) {
+          event.preventDefault();
+        }
       };
 
       const onTouchStart = (event: TouchEvent) => {
