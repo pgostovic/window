@@ -341,7 +341,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           } else if (
             currentHoverCell.current &&
             event.type === 'mouseleave' &&
-            (event.target as Element).className === rootElmntClassName
+            (event.target as Element).className.split(/\s+/).includes(rootElmntClassName)
           ) {
             if (cellEventTypes.includes('mouseleave')) {
               onCellEvent('mouseleave', currentHoverCell.current, event);

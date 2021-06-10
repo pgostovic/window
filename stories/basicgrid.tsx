@@ -1,6 +1,5 @@
 import React, { FC } from 'react';
 
-// import { Scroller } from '../src';
 import { Scroller } from '../src';
 
 const rows: string[][] = [];
@@ -140,6 +139,7 @@ export const GridWithEvents: FC = () => (
     <Scroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
+      cellClassName={() => 'theCell'}
       cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
       onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
     />
