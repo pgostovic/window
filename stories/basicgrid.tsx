@@ -1,5 +1,6 @@
 import React, { FC } from 'react';
 
+// import { Scroller } from '../src';
 import { Scroller } from '../src';
 
 const rows: string[][] = [];
@@ -44,11 +45,7 @@ const theStyle = `
 export const BasicGrid: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
-      style={{ height: '500px', backgroundColor: '#ddd' }}
-      rows={rows}
-      cellClassName="theCell"
-    />
+    <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} cellClassName={() => 'theCell'} />
   </>
 );
 
@@ -58,7 +55,7 @@ export const StickyRows: FC = () => (
     <Scroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
-      cellClassName="theCell"
+      cellClassName={() => 'theCell'}
       stickyRows={[5, 10]}
     />
   </>
@@ -70,7 +67,7 @@ export const StickyCols: FC = () => (
     <Scroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
-      cellClassName="theCell"
+      cellClassName={() => 'theCell'}
       stickyCols={[5, 10]}
     />
   </>
@@ -82,7 +79,7 @@ export const StickyRowsAndCols: FC = () => (
     <Scroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
-      cellClassName="theCell"
+      cellClassName={() => 'theCell'}
       stickyRows={[5, 10]}
       stickyCols={[5, 10]}
     />
@@ -101,41 +98,41 @@ export const CellSpan: FC = () => (
   </>
 );
 
-export const CellSpanFitWindow: FC = () => (
-  <>
-    <style>{theStyle}</style>
-    <Scroller
-      style={{ height: '500px', backgroundColor: '#ddd' }}
-      rows={rows}
-      cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
-      cellSpans={[{ row: 5, col: 5, rows: 1, cols: 'fitWindow' }]}
-    />
-  </>
-);
+// export const CellSpanFitWindow: FC = () => (
+//   <>
+//     <style>{theStyle}</style>
+//     <Scroller
+//       style={{ height: '500px', backgroundColor: '#ddd' }}
+//       rows={rows}
+//       cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
+//       cellSpans={[{ row: 5, col: 5, rows: 1, cols: 'fitWindow' }]}
+//     />
+//   </>
+// );
 
-export const SuppressHorizontalScroll: FC = () => (
-  <>
-    <style>{theStyle}</style>
-    <Scroller
-      style={{ height: '500px', backgroundColor: '#ddd' }}
-      rows={rows}
-      cellClassName={({ row }) => (row === 5 ? 'theCell spanner' : 'theCell')}
-      suppressHScrollRows={[5]}
-    />
-  </>
-);
+// export const SuppressHorizontalScroll: FC = () => (
+//   <>
+//     <style>{theStyle}</style>
+//     <Scroller
+//       style={{ height: '500px', backgroundColor: '#ddd' }}
+//       rows={rows}
+//       cellClassName={({ row }) => (row === 5 ? 'theCell spanner' : 'theCell')}
+//       suppressHScrollRows={[5]}
+//     />
+//   </>
+// );
 
-export const SuppressVerticalScroll: FC = () => (
-  <>
-    <style>{theStyle}</style>
-    <Scroller
-      style={{ height: '500px', backgroundColor: '#ddd' }}
-      rows={rows}
-      cellClassName={({ col }) => (col === 5 ? 'theCell spanner' : 'theCell')}
-      suppressVScrollCols={[5]}
-    />
-  </>
-);
+// export const SuppressVerticalScroll: FC = () => (
+//   <>
+//     <style>{theStyle}</style>
+//     <Scroller
+//       style={{ height: '500px', backgroundColor: '#ddd' }}
+//       rows={rows}
+//       cellClassName={({ col }) => (col === 5 ? 'theCell spanner' : 'theCell')}
+//       suppressVScrollCols={[5]}
+//     />
+//   </>
+// );
 
 export const GridWithEvents: FC = () => (
   <>
@@ -149,55 +146,133 @@ export const GridWithEvents: FC = () => (
   </>
 );
 
-export const GridWithArrowScroll: FC = () => (
+export const GridWithFixedMarginContent: FC = () => (
   <>
     <style>{theStyle}</style>
     <Scroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
-      arrowScrollAmount={50}
+      stickyRows={[5, 10]}
+      stickyCols={[5, 10]}
+      cellClassName={() => 'theCell'}
+      fixedMarginContent={{
+        top: {
+          height: 50,
+          node: (
+            <div
+              style={{
+                backgroundColor: '#666',
+                color: '#fff',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              Top
+            </div>
+          ),
+        },
+        bottom: {
+          height: 50,
+          node: (
+            <div
+              style={{
+                backgroundColor: '#666',
+                color: '#fff',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              Bottom
+            </div>
+          ),
+        },
+        left: {
+          width: 50,
+          node: (
+            <div
+              style={{
+                backgroundColor: '#555',
+                color: '#fff',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              Left
+            </div>
+          ),
+        },
+        right: {
+          width: 50,
+          node: (
+            <div
+              style={{
+                backgroundColor: '#555',
+                color: '#fff',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              Right
+            </div>
+          ),
+        },
+      }}
     />
   </>
 );
 
-export const GridTheWorks: FC = () => (
-  <>
-    <style>{theStyle}</style>
-    <p>Hold ALT-CMD while scrolling to show the window overflow.</p>
-    <Scroller
-      allowShowOverflow
-      style={{ height: '500px', marginTop: '50px', backgroundColor: '#ddd' }}
-      rows={rows}
-      cellClassName="theCell"
-      colWidth={c => (c === 3 ? 'natural' : 100)}
-      stickyRows={[1, 3, 17]}
-      stickyCols={[0, 5, 10, 15]}
-      suppressHScrollRows={[10, 11]}
-      cellSpans={[
-        { row: 1, col: 20, rows: 1, cols: 10 },
-        { row: 10, col: 0, rows: 1, cols: 'fitWindow' },
-        { row: 20, col: 20, rows: 3, cols: 3 },
-      ]}
-      fixedMarginContent={{
-        top: {
-          height: 50,
-          node: <div style={{ backgroundColor: 'pink', height: '50px' }}>Bubba</div>,
-        },
-      }}
-    >
-      {(cell, { row, col }) =>
-        row === 1 ? (
-          <div style={{ backgroundColor: '#eee', width: '100%', height: '100%' }}>Big Header</div>
-        ) : (row === 20 && col === 20) || (row === 10 && col === 0) ? (
-          <div key="spanner" className="spanner">
-            {cell}
-          </div>
-        ) : col === 3 ? (
-          <div style={{ whiteSpace: 'nowrap', minWidth: `50px` }}>{cell}</div>
-        ) : (
-          <>{cell}</>
-        )
-      }
-    </Scroller>
-  </>
-);
+// export const GridWithArrowScroll: FC = () => (
+//   <>
+//     <style>{theStyle}</style>
+//     <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} arrowScrollAmount={50} />
+//   </>
+// );
+
+// export const GridTheWorks: FC = () => (
+//   <>
+//     <style>{theStyle}</style>
+//     <p>Hold ALT-CMD while scrolling to show the window overflow.</p>
+//     <Scroller
+//       style={{ height: '500px', marginTop: '50px', backgroundColor: '#ddd' }}
+//       rows={rows}
+//       cellClassName="theCell"
+//       colWidth={c => (c === 3 ? 'natural' : 100)}
+//       stickyRows={[1, 3, 17]}
+//       stickyCols={[0, 5, 10, 15]}
+//       suppressHScrollRows={[10, 11]}
+//       cellSpans={[
+//         { row: 1, col: 20, rows: 1, cols: 10 },
+//         { row: 10, col: 0, rows: 1, cols: 'fitWindow' },
+//         { row: 20, col: 20, rows: 3, cols: 3 },
+//       ]}
+//       fixedMarginContent={{
+//         top: {
+//           height: 50,
+//           node: <div style={{ backgroundColor: 'pink', height: '50px' }}>Bubba</div>,
+//         },
+//       }}
+//     >
+//       {(cell, { row, col }) =>
+//         row === 1 ? (
+//           <div style={{ backgroundColor: '#eee', width: '100%', height: '100%' }}>Big Header</div>
+//         ) : (row === 20 && col === 20) || (row === 10 && col === 0) ? (
+//           <div key="spanner" className="spanner">
+//             {cell}
+//           </div>
+//         ) : col === 3 ? (
+//           <div style={{ whiteSpace: 'nowrap', minWidth: `50px` }}>{cell}</div>
+//         ) : (
+//           <>{cell}</>
+//         )
+//       }
+//     </Scroller>
+//   </>
+// );

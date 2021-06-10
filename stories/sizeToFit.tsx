@@ -15,8 +15,8 @@ for (let i = 0; i < 1000; i++) {
 export const SizeToFit: FC = () => (
   <>
     <p>
-      If you don&apos;t constrain the height of the Scroller, then all items will be rendered and
-      windowing will be effectively disabled.
+      If you don&apos;t constrain the height of the Scroller, then all items will be rendered and windowing will be
+      effectively disabled.
     </p>
     <Scroller style={{ width: '200px' }} rows={numbers} rowHeight={index => sizes[index]}>
       {(num: number, { row }) => (

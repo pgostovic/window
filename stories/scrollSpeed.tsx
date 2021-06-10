@@ -32,9 +32,7 @@ export const ScrollSpeed: FC = () => {
         freezeScroll={freezeScroll}
       >
         {(num: number) => (
-          <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
-            {num}
-          </div>
+          <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>{num}</div>
         )}
       </Scroller>
     </>

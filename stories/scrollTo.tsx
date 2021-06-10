@@ -26,13 +26,13 @@ export const ScrollToIndex: FC = () => {
       <p>The initScroll prop is set to 50.</p>
       <button onClick={() => windowRef.current.scrollTo(0, 0)}>Scroll to index 0</button>
       <button onClick={() => windowRef.current.scrollTo(100, 0)}>Scroll to index 100</button>
-      <button onClick={() => windowRef.current.setOffset({ x: 0, y: 1100 })}>
+      <button onClick={() => windowRef.current.setScrollPosition({ left: 0, top: 1100 })}>
         Scroll to offset 1100px
       </button>
       <Scroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
-        initScroll={{ row: 50, col: 0 }}
+        initPosition={{ row: 50, col: 0 }}
         rows={people}
       >
         {(person: Person, { row }) => (
@@ -67,8 +67,7 @@ export const ScrollToItem: FC = () => {
             <button style={{ marginRight: '10px' }} onClick={() => setMark(person)}>
               Mark
             </button>
-            {person.firstName} {person.lastName} --{' '}
-            <a href={`mailto:${person.email}`}>{person.email}</a>
+            {person.firstName} {person.lastName} -- <a href={`mailto:${person.email}`}>{person.email}</a>
           </div>
         )}
       </Scroller>

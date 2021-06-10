@@ -11,14 +11,14 @@ for (let i = 0; i < NUM; i++) {
 
 const sizes: (number | 'natural')[] = [];
 for (let i = 0; i < NUM; i++) {
-  if (i === 0) {
+  if (i === 0 || i === 50) {
     sizes.push('natural');
   } else {
     sizes.push(20 + Math.round(Math.random() * 50));
   }
 }
 
-let offset = { x: 0, y: 0 };
+let offset = { left: 0, top: 0 };
 
 export const ItemSizes: FC = () => {
   const windowRef = useRef<ScrollerRef>();
@@ -29,7 +29,7 @@ export const ItemSizes: FC = () => {
 
   useEffect(() => {
     return () => {
-      offset = windowRef.current.getOffset();
+      offset = windowRef.current.getScrollPosition();
     };
   });
   return (
@@ -42,7 +42,7 @@ export const ItemSizes: FC = () => {
         style={{ height: '500px', width: '200px' }}
         rows={slicedNums}
         rowHeight={index => slicedSizes[index]}
-        initOffset={offset}
+        initScrollPosition={offset}
       >
         {(num: number, { row }) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
@@ -52,9 +52,8 @@ export const ItemSizes: FC = () => {
         )}
       </Scroller>
       <p>
-        Note: Offset is saved on unmount (via ScrollerRef.getOffset()) and then applied on mount
-        (via initOffset prop). If you navigate to another story, then navigate back to this one, the
-        scroll offset will be the same.
+        Note: Offset is saved on unmount (via ScrollerRef.getOffset()) and then applied on mount (via initOffset prop).
+        If you navigate to another story, then navigate back to this one, the scroll offset will be the same.
       </p>
     </>
   );

@@ -1,6 +1,8 @@
-import commonjs from 'rollup-plugin-commonjs';
+import commonjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
 import resolve from 'rollup-plugin-node-resolve';
 import external from 'rollup-plugin-peer-deps-external';
+import { terser } from 'rollup-plugin-terser';
 import typescript from 'rollup-plugin-typescript2';
 
 export default {
@@ -27,8 +29,10 @@ export default {
       exclude: '**/__tests__/**',
       clean: true,
     }),
+    replace({ 'process.env.NODE_ENV': JSON.stringify('production') }),
     commonjs({
       include: ['node_modules/**'],
     }),
+    terser(),
   ],
 };
