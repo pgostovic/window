@@ -14,10 +14,11 @@ import React, {
   useState,
 } from 'react';
 import ResizeObserver from 'resize-observer-polyfill';
+import styled from 'styled-components';
 
 const DEFAULT_ROW_HEIGHT = 40;
 const DEFAULT_COL_WIDTH = () => ({ flex: 1, min: 80 });
-const DEFAULT_RENDER_BATCH_SIZE = 5;
+const DEFAULT_RENDER_BATCH_SIZE = 1;
 const DEFAULT_RENDER_THRESHOLD = 1;
 
 const scrollerClassIter = (function* nameGen(): IterableIterator<string> {
@@ -58,19 +59,6 @@ export interface ScrollerRef {
   getMaxScrollPosition(): { left: number; top: number };
   setScrollPosition(offset: { left: number; top: number }): void;
 }
-
-// interface CellSpan extends Omit<DerivedCellSpan, 'rows' | 'cols'> {
-//   rows: number | 'fitWindow';
-//   cols: number | 'fitWindow';
-// }
-
-// interface DerivedCellSpan {
-//   row: number;
-//   col: number;
-//   rows: number;
-//   cols: number;
-//   limitScroll?: 'h' | 'v';
-// }
 
 export type EventType =
   | 'click'
@@ -161,12 +149,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       bottom: fixedMarginContent?.bottom?.height || 0,
     };
 
-    console.log('RENDER', renderWindowRef.current);
+    // console.log('RENDER', renderWindowRef.current);
     const getRootElmnt = () => rootElmntRef.current || document.querySelector(`.${rootElmntClassName} `);
     const getCellsElmnt = () => getRootElmnt()?.firstElementChild;
-    // const getStuckRowsElmnt = () => getCellsElmnt()?.nextElementSibling;
-    // const getStuckColsElmnt = () => getStuckRowsElmnt()?.nextElementSibling;
-    // const getStuckCellsElmnt = () => getStuckColsElmnt()?.nextElementSibling;
 
     const numRows = rows.length;
     const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
@@ -553,6 +538,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     );
 
     const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
+    const stuckRowsHeight = stuckRowsRef.current.reduce((h, r) => h + rowHeights[r], 0);
+    const stuckColsWidth = stuckColsRef.current.reduce((w, c) => w + colWidths[c], 0);
 
     const cellElmnts: ReactElement[] = [];
     for (let r = fromRow; r < toRow; r += 1) {
@@ -569,10 +556,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               <CellElement
                 key={key}
                 className={className}
+                draggable={cellEventTypes.includes('dragstart')}
                 row={r}
                 col={c}
-                top={rowOffsets[r]}
-                left={colOffsets[c]}
+                top={rowOffsets[r] - stuckRowsHeight}
+                left={colOffsets[c] - stuckColsWidth}
                 height={height}
                 width={width}
               >
@@ -600,10 +588,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             <CellElement
               key={key}
               className={className}
+              draggable={cellEventTypes.includes('dragstart')}
               row={r}
               col={c}
               top={top}
-              left={colOffsets[c]}
+              left={colOffsets[c] - stuckColsWidth}
               height={height}
               width={width}
             >
@@ -630,9 +619,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             <CellElement
               key={key}
               className={className}
+              draggable={cellEventTypes.includes('dragstart')}
               row={r}
               col={c}
-              top={rowOffsets[r]}
+              top={rowOffsets[r] - stuckRowsHeight}
               left={left}
               height={height}
               width={width}
@@ -660,6 +650,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             <CellElement
               key={key}
               className={className}
+              draggable={cellEventTypes.includes('dragstart')}
               row={r}
               col={c}
               top={top}
@@ -674,51 +665,28 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }
 
-    const stuckRowsHeight = stuckRowsRef.current.reduce((h, r) => h + rowHeights[r], 0);
-    const stuckColsWidth = stuckColsRef.current.reduce((w, c) => w + colWidths[c], 0);
-
     return (
-      <div
+      <Root
         ref={rootElmntRef}
         className={[rootElmntClassName, className].filter(Boolean).join(' ')}
-        style={{ ...style, position: 'relative', overflow: 'hidden' }}
+        style={style}
+        padding={padding}
+        stuckRowsHeight={stuckRowsHeight}
+        stuckColsWidth={stuckColsWidth}
       >
-        <div
-          style={{
-            position: 'absolute',
-            top: px(padding.top),
-            left: px(padding.left),
-            right: px(padding.right),
-            bottom: px(padding.bottom),
-            overflow: 'auto',
-            willChange: 'transform',
-            boxSizing: 'border-box',
-          }}
-          onScroll={() => updateOffset()}
-        >
+        <Cells onScroll={() => updateOffset()}>
           <div
             className={`${rootElmntClassName}-cells`}
             style={{
               position: 'relative',
-              width: px(totalSize.width),
-              height: px(totalSize.height),
+              width: px(totalSize.width - stuckColsWidth),
+              height: px(totalSize.height - stuckRowsHeight),
             }}
           >
             {cellElmnts}
           </div>
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            top: px(padding.top),
-            left: px(padding.left),
-            width: '100%',
-            height: px(stuckRowsHeight),
-            overflowX: 'hidden',
-            willChange: 'transform',
-            backgroundColor: 'inherit',
-          }}
-        >
+        </Cells>
+        <StuckRows>
           <div
             className={`${rootElmntClassName}-cells`}
             style={{
@@ -729,19 +697,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           >
             {stuckRowCellElmnts}
           </div>
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            top: px(padding.top),
-            left: px(padding.left),
-            width: px(stuckColsWidth),
-            height: '100%',
-            overflowY: 'hidden',
-            willChange: 'transform',
-            backgroundColor: 'inherit',
-          }}
-        >
+        </StuckRows>
+        <StuckCols>
           <div
             className={`${rootElmntClassName}-cells`}
             style={{
@@ -752,71 +709,77 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           >
             {stuckColCellElmnts}
           </div>
-        </div>
-        <div
-          className={`${rootElmntClassName}-cells`}
-          style={{
-            position: 'absolute',
-            top: px(padding.top),
-            left: px(padding.left),
-            width: px(stuckColsWidth),
-            height: px(stuckRowsHeight),
-            willChange: 'transform',
-            backgroundColor: 'inherit',
-          }}
-        >
-          {stuckCellElmnts}
-        </div>
-        {fixedMarginContent?.top && (
-          <div
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: px(fixedMarginContent.top.height) }}
-          >
-            {fixedMarginContent.top.node}
-          </div>
-        )}
-        {fixedMarginContent?.bottom && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              width: '100%',
-              height: px(fixedMarginContent.bottom.height),
-            }}
-          >
-            {fixedMarginContent.bottom.node}
-          </div>
-        )}
-        {fixedMarginContent?.left && (
-          <div
-            style={{
-              position: 'absolute',
-              top: px(padding.top),
-              left: 0,
-              bottom: px(padding.bottom),
-              width: px(fixedMarginContent.left.width),
-            }}
-          >
-            {fixedMarginContent.left.node}
-          </div>
-        )}
-        {fixedMarginContent?.right && (
-          <div
-            style={{
-              position: 'absolute',
-              top: px(padding.top),
-              right: 0,
-              bottom: px(padding.bottom),
-              width: px(fixedMarginContent.right.width),
-            }}
-          >
-            {fixedMarginContent.right.node}
-          </div>
-        )}
-      </div>
+        </StuckCols>
+        <StuckCells className={`${rootElmntClassName}-cells`}>{stuckCellElmnts}</StuckCells>
+        <FixedTop>{fixedMarginContent?.top?.node}</FixedTop>
+        <FixedLeft>{fixedMarginContent?.left?.node}</FixedLeft>
+        <FixedRight>{fixedMarginContent?.right?.node}</FixedRight>
+        <FixedBottom>{fixedMarginContent?.bottom?.node}</FixedBottom>
+      </Root>
     );
   },
 );
+
+const Root = styled.div<{
+  padding: { left: number; top: number; right: number; bottom: number };
+  stuckRowsHeight: number;
+  stuckColsWidth: number;
+}>`
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: ${({ padding }) => px(padding.left)} ${({ stuckColsWidth }) => px(stuckColsWidth)} 1fr ${({
+      padding,
+    }) => px(padding.right)};
+  grid-template-rows: ${({ padding }) => px(padding.top)} ${({ stuckRowsHeight }) => px(stuckRowsHeight)} 1fr ${({
+      padding,
+    }) => px(padding.bottom)};
+  grid-template-areas:
+    'fixedTop fixedTop fixedTop fixedTop'
+    'fixedLeft stuckCells stuckRows fixedRight'
+    'fixedLeft stuckCols cells fixedRight'
+    'fixedBottom fixedBottom fixedBottom fixedBottom';
+`;
+
+const Cells = styled.div`
+  grid-area: cells;
+  overflow: auto;
+  will-change: transform;
+  box-sizing: border-box;
+`;
+
+const StuckRows = styled.div`
+  grid-area: stuckRows;
+  overflow-x: hidden;
+  will-change: transform;
+`;
+
+const StuckCols = styled.div`
+  grid-area: stuckCols;
+  overflow-y: hidden;
+  will-change: transform;
+`;
+
+const StuckCells = styled.div`
+  grid-area: stuckCells;
+  will-change: transform;
+`;
+
+const FixedTop = styled.div`
+  grid-area: fixedTop;
+`;
+
+const FixedLeft = styled.div`
+  grid-area: fixedLeft;
+`;
+
+const FixedRight = styled.div`
+  grid-area: fixedRight;
+`;
+
+const FixedBottom = styled.div`
+  grid-area: fixedBottom;
+`;
 
 const CellElement: FC<{
   className?: string;
@@ -826,10 +789,12 @@ const CellElement: FC<{
   left: number;
   width: number;
   height: number;
+  draggable: boolean;
   children: ReactNode;
-}> = ({ className, row, col, top, left, width, height, children }) => (
+}> = ({ className, row, col, top, left, width, height, draggable, children }) => (
   <div
     className={[`r${row}`, `c${col}`, className].filter(Boolean).join(' ')}
+    draggable={draggable || undefined}
     data-natural-height-row={height === -1 ? row : undefined}
     data-natural-width-col={width === -1 ? col : undefined}
     style={{
