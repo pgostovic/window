@@ -29,7 +29,7 @@ export default {
       exclude: '**/__tests__/**',
       clean: true,
     }),
-    replace({ 'process.env.NODE_ENV': JSON.stringify('production') }),
+    replace({ 'process.env.NODE_ENV': JSON.stringify('production'), preventAssignment: true }),
     commonjs({
       include: ['node_modules/**'],
     }),

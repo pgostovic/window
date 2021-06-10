@@ -415,6 +415,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           const scrollRight = scrollLeft + width;
           let { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 
+          if (forceRender) {
+            fromRow = 0;
+            toRow = 0;
+            fromCol = 0;
+            toCol = 0;
+          }
+
           scrollPositionRef.current = { left: scrollLeft, top: scrollTop };
 
           /**
