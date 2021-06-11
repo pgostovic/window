@@ -97,6 +97,7 @@ interface Props {
   initScrollPosition?: { left: number; top: number };
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
+  scrollEventSource?: HTMLElement;
   renderBatchSize?: number;
   renderThreshold?: number;
   cellClassName?(cell: Cell): string;
@@ -119,6 +120,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       initScrollPosition = { left: 0, top: 0 },
       cellEventTypes = [],
       onCellEvent,
+      scrollEventSource,
       renderBatchSize = DEFAULT_RENDER_BATCH_SIZE,
       renderThreshold = DEFAULT_RENDER_THRESHOLD,
       cellClassName,
@@ -151,7 +153,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     // console.log('RENDER', renderWindowRef.current);
     const getRootElmnt = () => rootElmntRef.current || document.querySelector(`.${rootElmntClassName} `);
-    const getCellsElmnt = () => getRootElmnt()?.firstElementChild;
+
+    const getScrollableElmnts = () => {
+      const cellsElmnt = getRootElmnt()?.firstElementChild;
+      const stuckRowsElmnt = cellsElmnt?.nextElementSibling;
+      const stuckColsElmnt = stuckRowsElmnt?.nextElementSibling;
+      return { cellsElmnt, stuckRowsElmnt, stuckColsElmnt };
+    };
 
     const numRows = rows.length;
     const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
@@ -181,11 +189,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         return maxOffset;
       },
       setScrollPosition(scrollPosition) {
-        const cellsElmnt = getCellsElmnt();
+        const { cellsElmnt } = getScrollableElmnts();
         if (cellsElmnt) {
           cellsElmnt.scrollTop = scrollPosition.top;
           cellsElmnt.scrollLeft = scrollPosition.left;
-          updateOffset();
+          updateOffset(cellsElmnt);
         }
       },
     };
@@ -245,9 +253,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [sortedStickyCols, colWidths, colWidthOverrides],
     );
 
+    const stuckRowsHeight = stuckRowsRef.current.reduce((h, r) => h + rowHeights[r], 0);
+    const stuckColsWidth = stuckColsRef.current.reduce((w, c) => w + colWidths[c], 0);
+
     // Handle sizing of the root element, which is the "window".
     useEffect(() => {
-      const cellsElmnt = getCellsElmnt();
+      const { cellsElmnt } = getScrollableElmnts();
       if (cellsElmnt) {
         if (initPosition) {
           cellsElmnt.scrollTop = rowOffsets[initPosition.row];
@@ -261,7 +272,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           const { width, height } = cellsElmnt.getBoundingClientRect();
           if (height !== windowSizeRef.current.height || width !== windowSizeRef.current.width) {
             windowSizeRef.current = { width, height };
-            updateOffset(true);
+            updateOffset(cellsElmnt, true);
           }
         };
 
@@ -283,6 +294,32 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         return () => resizeObserver.unobserve(cellsElmnt);
       }
     }, []);
+
+    /**
+     * If a `scrollEventSource` is specified then a `wheel` event listener is added to it
+     * and the scrollable elements are scrolled based on the event's deltaX and deltaY.
+     */
+    useEffect(() => {
+      if (scrollEventSource) {
+        const sourceElmnt = scrollEventSource;
+
+        const onWheel = (event: WheelEvent) => {
+          const { cellsElmnt } = getScrollableElmnts();
+          if (cellsElmnt) {
+            if (cellsElmnt.scrollBy) {
+              cellsElmnt.scrollBy(event.deltaX, event.deltaY);
+            } else {
+              cellsElmnt.scrollTop += event.deltaY;
+              cellsElmnt.scrollLeft += event.deltaX;
+            }
+            updateOffset();
+          }
+        };
+
+        sourceElmnt.addEventListener('wheel', onWheel);
+        return () => sourceElmnt.removeEventListener('wheel', onWheel);
+      }
+    }, [scrollEventSource]);
 
     /**
      * If the `rows` change, then recalulate the renderWindow.
@@ -406,104 +443,109 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
      * and determine which cells should be rendered.
      */
     const updateOffset = useCallback(
-      (forceRender = false) => {
-        const cellsElmnt = getCellsElmnt();
-        if (cellsElmnt) {
-          const { height, width } = windowSizeRef.current;
-          const { scrollLeft, scrollTop } = cellsElmnt;
-          const scrollBottom = scrollTop + height;
-          const scrollRight = scrollLeft + width;
-          let { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
+      (source?: Element, forceRender = false) => {
+        const { cellsElmnt, stuckRowsElmnt, stuckColsElmnt } = getScrollableElmnts();
 
-          if (forceRender) {
-            fromRow = 0;
-            toRow = 0;
-            fromCol = 0;
-            toCol = 0;
-          }
+        if (!cellsElmnt || !stuckRowsElmnt || !stuckColsElmnt) {
+          return;
+        }
 
-          scrollPositionRef.current = { left: scrollLeft, top: scrollTop };
+        /**
+         * Sync the scroll positions to the source if specified.
+         */
+        if (source === cellsElmnt) {
+          stuckRowsElmnt.scrollLeft = cellsElmnt.scrollLeft;
+          stuckColsElmnt.scrollTop = cellsElmnt.scrollTop;
+        } else if (source === stuckRowsElmnt) {
+          cellsElmnt.scrollLeft = stuckRowsElmnt.scrollLeft;
+        } else if (source === stuckColsElmnt) {
+          cellsElmnt.scrollTop = stuckColsElmnt.scrollTop;
+        }
 
-          /**
-           * visibleFromRow, visibleFromCol, visibleToRow, visibleToCol
-           * These are the boundaries that indicate which cells should be visible, even partially.
-           */
-          const visibleFromRow = Math.max(0, rowOffsets.findIndex(rOff => rOff >= scrollTop) - renderThreshold);
-          const visibleFromCol = Math.max(0, colOffsets.findIndex(cOff => cOff >= scrollLeft) - renderThreshold);
+        const { height, width } = windowSizeRef.current;
+        const { scrollLeft, scrollTop } = cellsElmnt;
+        const scrollBottom = scrollTop + height;
+        const scrollRight = scrollLeft + width;
+        let { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 
-          let visibleToRow = rowOffsets.findIndex(rOff => rOff >= scrollBottom) + renderThreshold;
-          if (visibleToRow === renderThreshold - 1) {
-            visibleToRow = numRows;
-          }
-          let visibleToCol = colOffsets.findIndex(cOff => cOff >= scrollRight) + renderThreshold;
-          if (visibleToCol === renderThreshold - 1) {
-            visibleToCol = numCols;
-          }
+        if (forceRender) {
+          fromRow = 0;
+          toRow = 0;
+          fromCol = 0;
+          toCol = 0;
+        }
 
-          /**
-           * Determine if render window needs to change. If the current render window does include
-           * all of the cells that should be visible then update the render window and render.
-           */
-          if (visibleFromRow < fromRow) {
-            fromRow = Math.max(0, visibleFromRow - renderBatchSize);
-            toRow = Math.min(numRows, visibleToRow);
-          }
+        scrollPositionRef.current = { left: scrollLeft, top: scrollTop };
 
-          if (visibleFromCol < fromCol) {
-            fromCol = Math.max(0, visibleFromCol - renderBatchSize);
-            toCol = Math.min(numCols, visibleToCol);
-          }
+        /**
+         * Determine stuck rows and columns.
+         */
+        const stuckRows = sortedStickyRows.filter(
+          (r, i) => rowOffsets[r] - stickyRowOffsets[i] <= scrollPositionRef.current.top,
+        );
+        const stuckCols = sortedStickyCols.filter(
+          (c, i) => colOffsets[c] - stickyColOffsets[i] <= scrollPositionRef.current.left,
+        );
 
-          if (visibleToRow > toRow) {
-            toRow = Math.min(rowOffsets.length, visibleToRow + renderBatchSize);
-            fromRow = visibleFromRow;
-          }
+        /**
+         * visibleFromRow, visibleFromCol, visibleToRow, visibleToCol
+         * These are the boundaries that indicate which cells should be visible, even partially.
+         */
+        const visibleFromRow = Math.max(0, rowOffsets.findIndex(rOff => rOff >= scrollTop) - renderThreshold);
+        const visibleFromCol = Math.max(0, colOffsets.findIndex(cOff => cOff >= scrollLeft) - renderThreshold);
 
-          if (visibleToCol > toCol) {
-            toCol = Math.min(colOffsets.length, visibleToCol + renderBatchSize);
-            fromCol = visibleFromCol;
-          }
+        let visibleToRow = rowOffsets.findIndex(rOff => rOff >= scrollBottom) + renderThreshold + stuckRows.length;
+        if (visibleToRow === renderThreshold - 1) {
+          visibleToRow = numRows;
+        }
+        let visibleToCol = colOffsets.findIndex(cOff => cOff >= scrollRight) + renderThreshold + stuckCols.length;
+        if (visibleToCol === renderThreshold - 1) {
+          visibleToCol = numCols;
+        }
 
-          /**
-           * Determine stuck rows and columns.
-           */
-          const stuckRows = sortedStickyRows.filter(
-            (r, i) => rowOffsets[r] - stickyRowOffsets[i] <= scrollPositionRef.current.top,
-          );
-          const stuckCols = sortedStickyCols.filter(
-            (c, i) => colOffsets[c] - stickyColOffsets[i] <= scrollPositionRef.current.left,
-          );
+        /**
+         * Determine if render window needs to change. If the current render window does include
+         * all of the cells that should be visible then update the render window and render.
+         */
+        if (visibleFromRow < fromRow) {
+          fromRow = Math.max(0, visibleFromRow - renderBatchSize);
+          toRow = Math.min(numRows, visibleToRow);
+        }
 
-          if (stuckRows.length > 0) {
-            const stuckRowsElmnt = cellsElmnt.nextElementSibling as HTMLDivElement;
-            stuckRowsElmnt.scrollLeft = scrollLeft;
-          }
+        if (visibleFromCol < fromCol) {
+          fromCol = Math.max(0, visibleFromCol - renderBatchSize);
+          toCol = Math.min(numCols, visibleToCol);
+        }
 
-          if (stuckCols.length > 0) {
-            const stuckColsElmnt = cellsElmnt.nextElementSibling?.nextElementSibling as HTMLDivElement;
-            stuckColsElmnt.scrollTop = scrollTop;
-          }
+        if (visibleToRow > toRow) {
+          toRow = Math.min(rowOffsets.length, visibleToRow + renderBatchSize);
+          fromRow = visibleFromRow;
+        }
 
-          /**
-           * If the expected render window is different from the current one, then set it and render.
-           */
-          if (
-            forceRender ||
-            fromRow !== renderWindowRef.current.fromRow ||
-            toRow !== renderWindowRef.current.toRow ||
-            fromCol !== renderWindowRef.current.fromCol ||
-            toCol !== renderWindowRef.current.toCol ||
-            !sameNumbers(stuckRows, stuckRowsRef.current) ||
-            !sameNumbers(stuckCols, stuckColsRef.current)
-          ) {
-            renderWindowRef.current = { fromRow, toRow, fromCol, toCol };
-            stuckRowsRef.current = stuckRows;
-            stuckColsRef.current = stuckCols;
-            render(r => !r);
-          }
+        if (visibleToCol > toCol) {
+          toCol = Math.min(colOffsets.length, visibleToCol + renderBatchSize);
+          fromCol = visibleFromCol;
+        }
+
+        /**
+         * If the expected render window is different from the current one, then set it and render.
+         */
+        if (
+          forceRender ||
+          fromRow !== renderWindowRef.current.fromRow ||
+          toRow !== renderWindowRef.current.toRow ||
+          fromCol !== renderWindowRef.current.fromCol ||
+          toCol !== renderWindowRef.current.toCol ||
+          !sameNumbers(stuckRows, stuckRowsRef.current) ||
+          !sameNumbers(stuckCols, stuckColsRef.current)
+        ) {
+          renderWindowRef.current = { fromRow, toRow, fromCol, toCol };
+          stuckRowsRef.current = stuckRows;
+          stuckColsRef.current = stuckCols;
+          render(r => !r);
         }
       },
-      [rowOffsets, colOffsets, numRows, numCols, sortedStickyRows],
+      [rowOffsets, colOffsets, numRows, numCols, sortedStickyRows, sortedStickyCols],
     );
 
     /**
@@ -545,8 +587,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     );
 
     const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
-    const stuckRowsHeight = stuckRowsRef.current.reduce((h, r) => h + rowHeights[r], 0);
-    const stuckColsWidth = stuckColsRef.current.reduce((w, c) => w + colWidths[c], 0);
 
     const cellElmnts: ReactElement[] = [];
     for (let r = fromRow; r < toRow; r += 1) {
@@ -681,7 +721,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         stuckRowsHeight={stuckRowsHeight}
         stuckColsWidth={stuckColsWidth}
       >
-        <Cells onScroll={() => updateOffset()}>
+        <Cells onScroll={event => updateOffset(event.currentTarget)}>
           <div
             className={`${rootElmntClassName}-cells`}
             style={{
@@ -693,31 +733,35 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             {cellElmnts}
           </div>
         </Cells>
-        <StuckRows>
-          <div
-            className={`${rootElmntClassName}-cells`}
-            style={{
-              position: 'relative',
-              width: px(totalSize.width),
-              height: px(stuckRowsHeight),
-            }}
-          >
-            {stuckRowCellElmnts}
-          </div>
+        <StuckRows className="stickyRows" onScroll={event => updateOffset(event.currentTarget)}>
+          {stuckRowCellElmnts.length > 0 && (
+            <div
+              className={`${rootElmntClassName}-cells`}
+              style={{
+                position: 'relative',
+                width: px(totalSize.width),
+                height: px(stuckRowsHeight),
+              }}
+            >
+              {stuckRowCellElmnts}
+            </div>
+          )}
         </StuckRows>
-        <StuckCols>
-          <div
-            className={`${rootElmntClassName}-cells`}
-            style={{
-              position: 'relative',
-              width: px(stuckColsWidth),
-              height: px(totalSize.height),
-            }}
-          >
-            {stuckColCellElmnts}
-          </div>
+        <StuckCols className="stickyCols" onScroll={event => updateOffset(event.currentTarget)}>
+          {stuckColCellElmnts.length > 0 && (
+            <div
+              className={`${rootElmntClassName}-cells`}
+              style={{
+                position: 'relative',
+                width: px(stuckColsWidth),
+                height: px(totalSize.height),
+              }}
+            >
+              {stuckColCellElmnts}
+            </div>
+          )}
         </StuckCols>
-        <StuckCells className={`${rootElmntClassName}-cells`}>{stuckCellElmnts}</StuckCells>
+        <StuckCells className={`${rootElmntClassName}-cells stickyCells`}>{stuckCellElmnts}</StuckCells>
         <FixedTop>{fixedMarginContent?.top?.node}</FixedTop>
         <FixedLeft>{fixedMarginContent?.left?.node}</FixedLeft>
         <FixedRight>{fixedMarginContent?.right?.node}</FixedRight>
@@ -757,19 +801,45 @@ const Cells = styled.div`
 
 const StuckRows = styled.div`
   grid-area: stuckRows;
-  overflow-x: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   will-change: transform;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &:empty {
+    display: none;
+  }
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `;
 
 const StuckCols = styled.div`
   grid-area: stuckCols;
-  overflow-y: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   will-change: transform;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &:empty {
+    display: none;
+  }
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `;
 
 const StuckCells = styled.div`
   grid-area: stuckCells;
   will-change: transform;
+
+  &:empty {
+    display: none;
+  }
 `;
 
 const FixedTop = styled.div`
