@@ -135,23 +135,35 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const rootElmntRef = createRef<HTMLDivElement>();
     const rootElmntClassName = useMemo(() => scrollerClassIter.next().value as string, []);
     const resizePidRef = useRef<NodeJS.Timeout>();
-    const windowSizeRef = useRef({ width: 0, height: 0 });
+    const scrollerSizeRef = useRef({ width: 0, height: 0 });
     const scrollPositionRef = useRef(initScrollPosition);
     const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
+    const paddingRef = useRef({
+      left: fixedMarginContent?.left?.width || 0,
+      right: fixedMarginContent?.right?.width || 0,
+      top: fixedMarginContent?.top?.height || 0,
+      bottom: fixedMarginContent?.bottom?.height || 0,
+    });
     const stuckRowsRef = useRef<number[]>([]);
     const stuckColsRef = useRef<number[]>([]);
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
     const [colWidthOverrides, setColWidthOverrides] = useState<SizeOverrides>({});
     const [, render] = useState(false);
 
-    const padding = {
+    // console.log('RENDER', renderWindowRef.current);
+
+    paddingRef.current = {
       left: fixedMarginContent?.left?.width || 0,
       right: fixedMarginContent?.right?.width || 0,
       top: fixedMarginContent?.top?.height || 0,
       bottom: fixedMarginContent?.bottom?.height || 0,
     };
 
-    // console.log('RENDER', renderWindowRef.current);
+    const cellsRegion = {
+      width: scrollerSizeRef.current.width - paddingRef.current.left - paddingRef.current.right,
+      height: scrollerSizeRef.current.height - paddingRef.current.top - paddingRef.current.bottom,
+    };
+
     const getRootElmnt = () => rootElmntRef.current || document.querySelector(`.${rootElmntClassName} `);
 
     const getScrollableElmnts = () => {
@@ -208,17 +220,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
      * NOTE: `rowHeight` and `colWidth` are not listed as dependencies because they are
      * likely defined as inline props.
      */
-    const rowHeights = useMemo(
-      () => calculateSizes(rowHeight, numRows, windowSizeRef.current.height, rowHeightOverrides),
-      [numRows, windowSizeRef.current.height, rowHeightOverrides],
-    );
+    const rowHeights = useMemo(() => calculateSizes(rowHeight, numRows, cellsRegion.height, rowHeightOverrides), [
+      numRows,
+      cellsRegion.height,
+      rowHeightOverrides,
+    ]);
     const rowOffsets = useMemo(() => calculateOffsets(rowHeights, rowHeightOverrides), [
       rowHeights,
       rowHeightOverrides,
     ]);
-    const colWidths = useMemo(() => calculateSizes(colWidth, numCols, windowSizeRef.current.width, colWidthOverrides), [
+    const colWidths = useMemo(() => calculateSizes(colWidth, numCols, cellsRegion.width, colWidthOverrides), [
       numCols,
-      windowSizeRef.current.width,
+      cellsRegion.width,
       colWidthOverrides,
     ]);
     const colOffsets = useMemo(() => calculateOffsets(colWidths, colWidthOverrides), [colWidths, colWidthOverrides]);
@@ -229,8 +242,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     };
 
     const maxOffset = {
-      left: Math.max(0, totalSize.width - windowSizeRef.current.width),
-      top: Math.max(0, totalSize.height - windowSizeRef.current.height),
+      left: Math.max(0, totalSize.width - cellsRegion.width),
+      top: Math.max(0, totalSize.height - cellsRegion.height),
     };
 
     const sortedStickyRows = useMemo(() => [...stickyRows].sort((a, b) => a - b), [stickyRows]);
@@ -258,8 +271,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     // Handle sizing of the root element, which is the "window".
     useEffect(() => {
+      const rootElmnt = getRootElmnt();
       const { cellsElmnt } = getScrollableElmnts();
-      if (cellsElmnt) {
+      if (rootElmnt && cellsElmnt) {
         if (initPosition) {
           cellsElmnt.scrollTop = rowOffsets[initPosition.row];
           cellsElmnt.scrollLeft = colOffsets[initPosition.col];
@@ -269,9 +283,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         }
 
         const detectSize = () => {
-          const { width, height } = cellsElmnt.getBoundingClientRect();
-          if (height !== windowSizeRef.current.height || width !== windowSizeRef.current.width) {
-            windowSizeRef.current = { width, height };
+          const { width, height } = rootElmnt.getBoundingClientRect();
+          if (height !== scrollerSizeRef.current.height || width !== scrollerSizeRef.current.width) {
+            scrollerSizeRef.current = { width, height };
             updateOffset(cellsElmnt, true);
           }
         };
@@ -285,13 +299,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const resizeObserver = new ResizeObserver(() => {
           if (resizePidRef.current) {
             clearTimeout(resizePidRef.current);
+            resizePidRef.current = undefined;
+          } else {
+            detectSize();
           }
           resizePidRef.current = setTimeout(() => {
+            resizePidRef.current = undefined;
             detectSize();
           }, 100);
         });
-        resizeObserver.observe(cellsElmnt);
-        return () => resizeObserver.unobserve(cellsElmnt);
+        resizeObserver.observe(rootElmnt);
+        return () => resizeObserver.unobserve(rootElmnt);
       }
     }, []);
 
@@ -450,6 +468,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           return;
         }
 
+        const scrollableHeight =
+          scrollerSizeRef.current.height - paddingRef.current.top - paddingRef.current.bottom - stuckRowsHeight;
+        const scrollableWidth =
+          scrollerSizeRef.current.width - paddingRef.current.left - paddingRef.current.right - stuckColsWidth;
+
         /**
          * Sync the scroll positions to the source if specified.
          */
@@ -462,10 +485,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           cellsElmnt.scrollTop = stuckColsElmnt.scrollTop;
         }
 
-        const { height, width } = windowSizeRef.current;
         const { scrollLeft, scrollTop } = cellsElmnt;
-        const scrollBottom = scrollTop + height;
-        const scrollRight = scrollLeft + width;
+        const scrollBottom = scrollTop + scrollableHeight;
+        const scrollRight = scrollLeft + scrollableWidth;
         let { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
 
         if (forceRender) {
@@ -542,7 +564,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           render(r => !r);
         }
       },
-      [rowOffsets, colOffsets, numRows, numCols, sortedStickyRows, sortedStickyCols],
+      [
+        rowOffsets,
+        colOffsets,
+        stickyRowOffsets,
+        stickyColOffsets,
+        numRows,
+        numCols,
+        sortedStickyRows,
+        sortedStickyCols,
+        stuckRowsHeight,
+        stuckColsWidth,
+      ],
     );
 
     /**
@@ -714,7 +747,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         ref={rootElmntRef}
         className={[rootElmntClassName, className].filter(Boolean).join(' ')}
         style={style}
-        padding={padding}
+        padding={paddingRef.current}
         stuckRowsHeight={stuckRowsHeight}
         stuckColsWidth={stuckColsWidth}
       >

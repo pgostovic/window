@@ -24,7 +24,7 @@ for (let i = 0; i < 1000; i += 1) {
   });
 }
 
-const peopleArray = people.map(p => [p.id, p.firstName, p.lastName, p.email, p.department, p.phone]);
+const peopleArray = people.map(p => [p.email, p.id, p.firstName, p.lastName, p.department, p.phone]);
 
 export const RichGrid: FC = () => (
   <>
@@ -33,7 +33,7 @@ export const RichGrid: FC = () => (
       rows={peopleArray}
       stickyRows={[0, 1, 5, 10]}
       stickyCols={[0]}
-      colWidth={c => (c === 3 ? { flex: 1, min: 250 } : 130)}
+      colWidth={c => (c === 0 ? { flex: 1, min: 250 } : 130)}
     >
       {(data, { col }) => (
         <div
