@@ -3,6 +3,7 @@ import React, {
   CSSProperties,
   FC,
   forwardRef,
+  KeyboardEvent,
   MutableRefObject,
   ReactElement,
   ReactNode,
@@ -95,6 +96,7 @@ interface Props {
   };
   initPosition?: { row: number; col: number };
   initScrollPosition?: { left: number; top: number };
+  arrowScrollAmount?: number | { x: number; y: number };
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   scrollEventSource?: HTMLElement;
@@ -118,6 +120,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       fixedMarginContent,
       initPosition,
       initScrollPosition = { left: 0, top: 0 },
+      arrowScrollAmount,
       cellEventTypes = [],
       onCellEvent,
       scrollEventSource,
@@ -579,6 +582,36 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     );
 
     /**
+     * Keydown event handler for the root element. This is used for:
+     * - scrolling with arrow keys.
+     */
+    const onKeyDown = useCallback(
+      (event: KeyboardEvent<HTMLDivElement>) => {
+        if (arrowScrollAmount) {
+          const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
+          const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
+          const currentPosition = scrollerRef.getScrollPosition();
+          switch (event.key) {
+            case 'ArrowUp':
+              scrollerRef.setScrollPosition({ ...currentPosition, top: currentPosition.top - yScrollAmount });
+              break;
+            case 'ArrowDown':
+              scrollerRef.setScrollPosition({ ...currentPosition, top: currentPosition.top + yScrollAmount });
+              break;
+            case 'ArrowLeft':
+              scrollerRef.setScrollPosition({ ...currentPosition, left: currentPosition.left - xScrollAmount });
+              break;
+            case 'ArrowRight':
+              scrollerRef.setScrollPosition({ ...currentPosition, left: currentPosition.left + xScrollAmount });
+              break;
+            default:
+          }
+        }
+      },
+      [arrowScrollAmount, maxOffset.left, maxOffset.top],
+    );
+
+    /**
      * Make sure the renderWindow boundaries don't exceed the data boundaries. If the `rows` change then
      * the correct renderWindow boundaries will be calculated in `updateOffset()` via an effect. This enforcement
      * is to guard against array bounds errors during render, before the effect call.
@@ -750,6 +783,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         padding={paddingRef.current}
         stuckRowsHeight={stuckRowsHeight}
         stuckColsWidth={stuckColsWidth}
+        tabIndex={arrowScrollAmount ? 0 : undefined}
+        onKeyDown={arrowScrollAmount ? onKeyDown : undefined}
       >
         <Cells onScroll={event => updateOffset(event.currentTarget)}>
           <div

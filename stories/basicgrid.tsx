@@ -229,12 +229,12 @@ export const GridWithFixedMarginContent: FC = () => (
   </>
 );
 
-// export const GridWithArrowScroll: FC = () => (
-//   <>
-//     <style>{theStyle}</style>
-//     <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} arrowScrollAmount={50} />
-//   </>
-// );
+export const GridWithArrowScroll: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} arrowScrollAmount={50} />
+  </>
+);
 
 // export const GridTheWorks: FC = () => (
 //   <>
