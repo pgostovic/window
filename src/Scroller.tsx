@@ -901,6 +901,7 @@ const StuckCols = styled.div`
 const StuckCells = styled.div`
   grid-area: stuckCells;
   will-change: transform;
+  position: relative;
 
   &:empty {
     display: none;
