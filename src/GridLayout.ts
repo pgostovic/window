@@ -98,6 +98,32 @@ export default class GridLayout {
     return this.windowPxRect;
   }
 
+  moveToTop() {
+    this.moveWindow(this.windowPxRect.x, 0);
+  }
+
+  moveToBottom() {
+    this.moveWindow(this.windowPxRect.x, this.gridPxSize.height - this.windowPxRect.height);
+  }
+
+  moveToLeft() {
+    this.moveWindow(0, this.windowPxRect.y);
+  }
+
+  moveToRight() {
+    this.moveWindow(this.gridPxSize.width - this.windowPxRect.width, this.windowPxRect.y);
+  }
+
+  pageUp() {
+    const stuckRowsHeight = Object.values(this.stuckRows).reduce((h, sr) => h + sr.height, 0);
+    this.moveWindowBy(0, -(this.windowPxRect.height - stuckRowsHeight));
+  }
+
+  pageDown() {
+    const stuckRowsHeight = Object.values(this.stuckRows).reduce((h, sr) => h + sr.height, 0);
+    this.moveWindowBy(0, this.windowPxRect.height - stuckRowsHeight);
+  }
+
   moveWindowBy(dx: number, dy: number) {
     this.moveWindow(this.windowPxRect.x + dx, this.windowPxRect.y + dy);
   }
@@ -206,8 +232,8 @@ export default class GridLayout {
       const updates = {
         ...this.updates,
         cellsRect: shouldUpdateCellsRect ? this.updates.cellsRect : undefined,
-        stuckRows: stuckRowsChanged ? this.updates.stuckRows : undefined,
-        stuckCols: stuckColsChanged ? this.updates.stuckCols : undefined,
+        stuckRows: forceImmediate || stuckRowsChanged ? this.updates.stuckRows : undefined,
+        stuckCols: forceImmediate || stuckColsChanged ? this.updates.stuckCols : undefined,
       };
 
       this.updateHandler(updates);

@@ -155,7 +155,8 @@ export const GridWithFixedMarginContent: FC = () => (
       stickyRows={[5, 10]}
       stickyCols={[5, 10]}
       cellClassName={() => 'theCell'}
-      fixedMarginContent={{
+      arrowScrollAmount={50}
+      fixedMargin={{
         top: {
           height: 50,
           node: (
@@ -232,6 +233,11 @@ export const GridWithFixedMarginContent: FC = () => (
 export const GridWithArrowScroll: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} arrowScrollAmount={50} />
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      arrowScrollAmount={50}
+      cellClassName={() => 'theCell'}
+    />
   </>
 );

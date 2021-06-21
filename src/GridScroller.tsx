@@ -16,6 +16,7 @@ import React, {
 import ResizeObserver from 'resize-observer-polyfill';
 import styled from 'styled-components';
 
+import FixedMargin, { FixedMarginProps } from './FixedMargin';
 import GridLayout, { StuckCols, StuckRows, WindowCellsRect } from './GridLayout';
 
 const DEFAULT_ROW_HEIGHT = 40;
@@ -86,6 +87,7 @@ interface Props {
   stickyRows?: number[];
   stickyCols?: number[];
   cellSpans?: CellSpan[];
+  fixedMargin?: FixedMarginProps;
   initPosition?: { row: number; col: number };
   initScrollPosition?: { left: number; top: number };
   arrowScrollAmount?: number | { x: number; y: number };
@@ -107,6 +109,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       stickyRows = [],
       stickyCols = [],
       cellSpans = [],
+      fixedMargin,
       initPosition,
       cellEventTypes = [],
       onCellEvent,
@@ -284,12 +287,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }, []);
 
-    const listenerOptions = mayUsePassive ? { passive: false } : false;
-
     /**
-     * If a `scrollEventSource` is specified then a `wheel` event listener is added to it
-     * and the scrollable elements are scrolled based on the event's deltaX and deltaY.
+     * Set up listener(s) for scroll events. Desktop uses the `wheel` event. Events come from
+     * the rootElmnt by default, but an alternate `scrollEventSource` may be specified instead.
+     *
+     * TODO: Touch events for mobile. Mobile should use passive mode and should NOT call `event.preventDefault()`.
      */
+    const listenerOptions = mayUsePassive ? { passive: false } : false;
     useEffect(() => {
       const sourceElmnt = scrollEventSource || rootElmntRef.current;
       if (sourceElmnt) {
@@ -416,40 +420,41 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
         const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
         const handleKey = (event: KeyboardEvent) => {
-          const currentPos = scrollerApi.getScrollPosition();
-          const windowRect = gridLayoutRef.current.getWindowRect();
-          const gridSize = gridLayoutRef.current.getGridSize();
-
-          const maxTop = gridSize.height - windowRect.height;
-          const maxLeft = gridSize.width - windowRect.width;
-          const meta = event.metaKey;
-
+          const gridLayout = gridLayoutRef.current;
           let handled = true;
-          switch (event.key) {
+          switch ([event.key, event.metaKey ? 'Meta' : undefined].filter(Boolean).join(':')) {
             case 'ArrowUp':
-              scrollerApi.setScrollPosition({ ...currentPos, top: meta ? 0 : currentPos.top - yScrollAmount });
+              gridLayout.moveWindowBy(0, -yScrollAmount);
               break;
             case 'ArrowDown':
-              scrollerApi.setScrollPosition({ ...currentPos, top: meta ? maxTop : currentPos.top + yScrollAmount });
+              gridLayout.moveWindowBy(0, yScrollAmount);
               break;
             case 'ArrowLeft':
-              scrollerApi.setScrollPosition({ ...currentPos, left: meta ? 0 : currentPos.left - xScrollAmount });
+              gridLayout.moveWindowBy(-xScrollAmount, 0);
               break;
             case 'ArrowRight':
-              scrollerApi.setScrollPosition({ ...currentPos, left: meta ? maxLeft : currentPos.left + xScrollAmount });
+              gridLayout.moveWindowBy(xScrollAmount, 0);
               break;
             case 'PageUp':
-              scrollerApi.setScrollPosition({ ...currentPos, top: currentPos.top - windowRect.height });
+              gridLayout.pageUp();
               break;
             case 'PageDown':
             case ' ': // Space
-              scrollerApi.setScrollPosition({ ...currentPos, top: currentPos.top + windowRect.height });
+              gridLayout.pageDown();
               break;
             case 'Home':
-              scrollerApi.setScrollPosition({ ...currentPos, top: 0 });
+            case 'ArrowUp:Meta':
+              gridLayout.moveToTop();
               break;
             case 'End':
-              scrollerApi.setScrollPosition({ ...currentPos, top: maxTop });
+            case 'ArrowDown:Meta':
+              gridLayout.moveToBottom();
+              break;
+            case 'ArrowLeft:Meta':
+              gridLayout.moveToLeft();
+              break;
+            case 'ArrowRight:Meta':
+              gridLayout.moveToRight();
               break;
             default:
               handled = false;
@@ -634,50 +639,46 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const gridSize = gridLayoutRef.current.getGridSize();
 
     return (
-      <Root
-        ref={rootElmntRef}
-        id={scrollerId}
-        style={style}
-        className={className}
-        tabIndex={arrowScrollAmount ? 0 : undefined}
-      >
-        <Cells
-          ref={cellsElmntRef}
-          className={`${scrollerId}-cells`}
-          style={{
-            width: px(gridSize.width),
-            height: px(gridSize.height),
-          }}
-        >
-          {cellElmnts}
-        </Cells>
-        {stuckRowCellElmnts.length > 0 && (
-          <StuckCells
-            ref={stuckRowCellsElmntRef}
-            className={`${scrollerId}-cells stickyRows`}
-            style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
+      <FixedMargin style={style} className={className} {...fixedMargin}>
+        <Root ref={rootElmntRef} id={scrollerId} tabIndex={arrowScrollAmount ? 0 : undefined}>
+          <Cells
+            ref={cellsElmntRef}
+            className={`${scrollerId}-cells`}
+            style={{
+              width: px(gridSize.width),
+              height: px(gridSize.height),
+            }}
           >
-            {stuckRowCellElmnts}
-          </StuckCells>
-        )}
-        {stuckColCellElmnts.length > 0 && (
-          <StuckCells
-            ref={stuckColCellsElmntRef}
-            className={`${scrollerId}-cells stickyCols`}
-            style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
-          >
-            {stuckColCellElmnts}
-          </StuckCells>
-        )}
-        {stuckCellElmnts.length > 0 && (
-          <StuckCells
-            className={`${scrollerId}-cells stickyCells`}
-            style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
-          >
-            {stuckCellElmnts}
-          </StuckCells>
-        )}
-      </Root>
+            {cellElmnts}
+          </Cells>
+          {stuckRowCellElmnts.length > 0 && (
+            <StuckCells
+              ref={stuckRowCellsElmntRef}
+              className={`${scrollerId}-cells stickyRows`}
+              style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
+            >
+              {stuckRowCellElmnts}
+            </StuckCells>
+          )}
+          {stuckColCellElmnts.length > 0 && (
+            <StuckCells
+              ref={stuckColCellsElmntRef}
+              className={`${scrollerId}-cells stickyCols`}
+              style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
+            >
+              {stuckColCellElmnts}
+            </StuckCells>
+          )}
+          {stuckCellElmnts.length > 0 && (
+            <StuckCells
+              className={`${scrollerId}-cells stickyCells`}
+              style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
+            >
+              {stuckCellElmnts}
+            </StuckCells>
+          )}
+        </Root>
+      </FixedMargin>
     );
   },
 );
@@ -685,6 +686,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 const Root = styled.div`
   position: relative;
   overflow: hidden;
+  background: inherit;
+  grid-area: scroller; // referenced in FixedMargin.
 `;
 
 const Cells = styled.div`
