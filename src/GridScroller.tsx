@@ -80,6 +80,15 @@ interface SizeOverrides {
   [key: number]: number;
 }
 
+interface TouchInfo {
+  t: number;
+  x: number;
+  dx: number;
+  y: number;
+  dy: number;
+  pid?: NodeJS.Timeout;
+}
+
 interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
@@ -132,6 +141,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const cellsElmntRef = createRef<HTMLDivElement>();
     const stuckRowCellsElmntRef = createRef<HTMLDivElement>();
     const stuckColCellsElmntRef = createRef<HTMLDivElement>();
+    const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
 
     // State
     const [windowCellsRect, setWindowCellsRect] = useState<WindowCellsRect>({ row: 0, col: 0, numRows: 0, numCols: 0 });
@@ -293,7 +303,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
      *
      * TODO: Touch events for mobile. Mobile should use passive mode and should NOT call `event.preventDefault()`.
      */
-    const listenerOptions = mayUsePassive ? { passive: false } : false;
+    // const listenerOptions = mayUsePassive ? { passive: false } : false;
     useEffect(() => {
       const sourceElmnt = scrollEventSource || rootElmntRef.current;
       if (sourceElmnt) {
@@ -302,8 +312,61 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           performance.mark('wheel');
           gridLayoutRef.current.moveWindowBy(event.deltaX, event.deltaY);
         };
-        sourceElmnt.addEventListener('wheel', onWheel, listenerOptions);
-        return () => sourceElmnt.removeEventListener('wheel', onWheel);
+
+        const onTouchStart = (event: TouchEvent) => {
+          if (touchInfoRef.current.pid) {
+            clearInterval(touchInfoRef.current.pid);
+            touchInfoRef.current.pid = undefined;
+          }
+
+          const t = event.timeStamp;
+          const x = event.touches[0].clientX;
+          const y = event.touches[0].clientY;
+          touchInfoRef.current = { t, x, dx: 0, y, dy: 0 };
+        };
+
+        const onTouchMove = (event: TouchEvent) => {
+          const t = event.timeStamp;
+          const x = event.touches[0].clientX;
+          const dx = touchInfoRef.current.x - x;
+          const y = event.touches[0].clientY;
+          const dy = touchInfoRef.current.y - y;
+          gridLayoutRef.current.moveWindowBy(dx, dy);
+          touchInfoRef.current = { t, x, dx, y, dy };
+        };
+
+        const onTouchEnd = (event: TouchEvent) => {
+          const touchInfo = touchInfoRef.current;
+
+          const t = event.timeStamp;
+          let speedX = touchInfo.dx / (t - touchInfo.t);
+          let speedY = touchInfo.dy / (t - touchInfo.t);
+
+          const pid = setInterval(() => {
+            const dx = speedX * 16;
+            const dy = speedY * 16;
+            gridLayoutRef.current.moveWindowBy(dx, dy);
+            speedX = speedX * 0.95;
+            speedY = speedY * 0.95;
+            if (Math.abs(speedX) + Math.abs(speedY) < 0.01) {
+              clearInterval(pid);
+              touchInfoRef.current.pid = undefined;
+            }
+          }, 16);
+
+          touchInfoRef.current = { ...touchInfo, pid };
+        };
+
+        sourceElmnt.addEventListener('wheel', onWheel, mayUsePassive ? { passive: false } : false);
+        sourceElmnt.addEventListener('touchstart', onTouchStart, mayUsePassive ? { passive: true } : false);
+        sourceElmnt.addEventListener('touchmove', onTouchMove, mayUsePassive ? { passive: true } : false);
+        sourceElmnt.addEventListener('touchend', onTouchEnd);
+        return () => {
+          sourceElmnt.removeEventListener('wheel', onWheel);
+          sourceElmnt.removeEventListener('touchstart', onTouchStart);
+          sourceElmnt.removeEventListener('touchmove', onTouchMove);
+          sourceElmnt.removeEventListener('touchend', onTouchEnd);
+        };
       }
     }, [scrollEventSource]);
 
