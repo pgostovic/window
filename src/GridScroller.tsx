@@ -86,20 +86,12 @@ interface Props {
   stickyRows?: number[];
   stickyCols?: number[];
   cellSpans?: CellSpan[];
-  fixedMarginContent?: {
-    top?: { height: number; node: ReactNode };
-    bottom?: { height: number; node: ReactNode };
-    left?: { width: number; node: ReactNode };
-    right?: { width: number; node: ReactNode };
-  };
   initPosition?: { row: number; col: number };
   initScrollPosition?: { left: number; top: number };
   arrowScrollAmount?: number | { x: number; y: number };
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   scrollEventSource?: HTMLElement;
-  renderBatchSize?: number;
-  renderThreshold?: number;
   cellClassName?(cell: Cell): string;
   children?(data: unknown, cell: Cell): ReactNode;
   style?: CSSProperties;
@@ -119,6 +111,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       cellEventTypes = [],
       onCellEvent,
       initScrollPosition = { left: 0, top: 0 },
+      arrowScrollAmount,
       scrollEventSource,
       cellClassName,
       children: renderCell = data => data as ReactNode,
@@ -414,6 +407,64 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     });
 
+    /**
+     * Handle keyboard navigation with arrow keys, etc.
+     */
+    useEffect(() => {
+      const rootElmnt = rootElmntRef.current;
+      if (arrowScrollAmount && rootElmnt) {
+        const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
+        const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
+        const handleKey = (event: KeyboardEvent) => {
+          const currentPos = scrollerApi.getScrollPosition();
+          const windowRect = gridLayoutRef.current.getWindowRect();
+          const gridSize = gridLayoutRef.current.getGridSize();
+
+          const maxTop = gridSize.height - windowRect.height;
+          const maxLeft = gridSize.width - windowRect.width;
+          const meta = event.metaKey;
+
+          let handled = true;
+          switch (event.key) {
+            case 'ArrowUp':
+              scrollerApi.setScrollPosition({ ...currentPos, top: meta ? 0 : currentPos.top - yScrollAmount });
+              break;
+            case 'ArrowDown':
+              scrollerApi.setScrollPosition({ ...currentPos, top: meta ? maxTop : currentPos.top + yScrollAmount });
+              break;
+            case 'ArrowLeft':
+              scrollerApi.setScrollPosition({ ...currentPos, left: meta ? 0 : currentPos.left - xScrollAmount });
+              break;
+            case 'ArrowRight':
+              scrollerApi.setScrollPosition({ ...currentPos, left: meta ? maxLeft : currentPos.left + xScrollAmount });
+              break;
+            case 'PageUp':
+              scrollerApi.setScrollPosition({ ...currentPos, top: currentPos.top - windowRect.height });
+              break;
+            case 'PageDown':
+            case ' ': // Space
+              scrollerApi.setScrollPosition({ ...currentPos, top: currentPos.top + windowRect.height });
+              break;
+            case 'Home':
+              scrollerApi.setScrollPosition({ ...currentPos, top: 0 });
+              break;
+            case 'End':
+              scrollerApi.setScrollPosition({ ...currentPos, top: maxTop });
+              break;
+            default:
+              handled = false;
+          }
+          if (handled) {
+            event.preventDefault();
+          }
+        };
+        rootElmnt.addEventListener('keydown', handleKey);
+        return () => {
+          rootElmnt.removeEventListener('keydown', handleKey);
+        };
+      }
+    }, [arrowScrollAmount]);
+
     const getAltCellSize = (cell: Cell) => {
       const cellSpan = cellSpans.find(({ row, col }) => row === cell.row && col === cell.col);
       if (cellSpan) {
@@ -583,7 +634,13 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const gridSize = gridLayoutRef.current.getGridSize();
 
     return (
-      <Root ref={rootElmntRef} id={scrollerId} style={style} className={className}>
+      <Root
+        ref={rootElmntRef}
+        id={scrollerId}
+        style={style}
+        className={className}
+        tabIndex={arrowScrollAmount ? 0 : undefined}
+      >
         <Cells
           ref={cellsElmntRef}
           className={`${scrollerId}-cells`}
