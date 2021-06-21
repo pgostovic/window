@@ -3,16 +3,15 @@ import React, {
   CSSProperties,
   FC,
   forwardRef,
+  memo,
   MutableRefObject,
   ReactElement,
   ReactNode,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  WheelEvent as ReactWheelEvent,
 } from 'react';
 import ResizeObserver from 'resize-observer-polyfill';
 import styled from 'styled-components';
@@ -182,26 +181,35 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     gridLayoutRef.current.setStickyRows(stickyRows);
     gridLayoutRef.current.setStickyCols(stickyCols);
 
+    const rafPidRef = useRef(0);
+
     /**
      * TODO: memoize with useCallback()? I think it's not needed.
      */
     gridLayoutRef.current.updateHandler = ({ translate, cellsRect, stuckCols, stuckRows }) => {
       const cellsElmnt = cellsElmntRef.current;
-      if (cellsElmnt) {
-        cellsElmnt.style.transform = `translate(${translate.x}px, ${translate.y}px)`;
-      }
-
       const stuckRowCellsElmnt = stuckRowCellsElmntRef.current;
-      if (stuckRowCellsElmnt) {
-        stuckRowCellsElmnt.style.transform = `translateX(${translate.x}px)`;
-      }
-
       const stuckColCellsElmnt = stuckColCellsElmntRef.current;
-      if (stuckColCellsElmnt) {
-        stuckColCellsElmnt.style.transform = `translateY(${translate.y}px)`;
+
+      if (rafPidRef.current) {
+        cancelAnimationFrame(rafPidRef.current);
       }
+      rafPidRef.current = requestAnimationFrame(() => {
+        performance.mark('translate');
+        rafPidRef.current = 0;
+        if (cellsElmnt) {
+          cellsElmnt.style.transform = `translate(${translate.x}px, ${translate.y}px)`;
+        }
+        if (stuckRowCellsElmnt) {
+          stuckRowCellsElmnt.style.transform = `translateX(${translate.x}px)`;
+        }
+        if (stuckColCellsElmnt) {
+          stuckColCellsElmnt.style.transform = `translateY(${translate.y}px)`;
+        }
+      });
 
       if (cellsRect) {
+        performance.mark('updateCellsRect');
         setWindowCellsRect(cellsRect);
       }
       if (stuckCols) {
@@ -283,19 +291,21 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       }
     }, []);
 
+    const listenerOptions = mayUsePassive ? { passive: false } : false;
+
     /**
      * If a `scrollEventSource` is specified then a `wheel` event listener is added to it
      * and the scrollable elements are scrolled based on the event's deltaX and deltaY.
      */
     useEffect(() => {
-      if (scrollEventSource) {
-        console.log('ADDING');
-        const sourceElmnt = scrollEventSource;
+      const sourceElmnt = scrollEventSource || rootElmntRef.current;
+      if (sourceElmnt) {
         const onWheel = (event: WheelEvent) => {
+          event.preventDefault();
           performance.mark('wheel');
           gridLayoutRef.current.moveWindowBy(event.deltaX, event.deltaY);
         };
-        sourceElmnt.addEventListener('wheel', onWheel);
+        sourceElmnt.addEventListener('wheel', onWheel, listenerOptions);
         return () => sourceElmnt.removeEventListener('wheel', onWheel);
       }
     }, [scrollEventSource]);
@@ -440,14 +450,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     /** Render the actual elements. */
     const cellElmnts: ReactElement[] = [];
-    let top = 0;
     for (let r = renderFromRow; r < renderToRow; r += 1) {
-      const { height } = rowPositions[r];
+      const { y, height } = rowPositions[r];
       if (!stuckRows[r]) {
-        let left = 0;
         for (let c = renderFromCol; c < renderToCol; c += 1) {
           const key = `${r}-${c}`;
-          const { width } = colPositions[c];
+          const { x, width } = colPositions[c];
           if (!stuckCols[c] && !hiddenCellKeys.includes(key)) {
             const cell = { row: r, col: c, data: rows[r][c] };
             const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
@@ -458,30 +466,29 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 className={className}
                 row={r}
                 col={c}
-                left={left}
-                top={top}
+                left={x}
+                top={y}
                 width={altSize.width || width}
                 height={altSize.height || height}
+                naturalHeightRow={height === -1 ? r : undefined}
+                naturalWidthCol={width === -1 ? c : undefined}
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
               </CellElement>,
             );
           }
-          left += width;
         }
       }
-      top += height;
     }
 
     const stuckRowCellElmnts: ReactElement[] = [];
     let stuckRowsHeight = 0;
     Object.entries(stuckRows).forEach(([row, pos]) => {
       const r = Number(row);
-      let left = 0;
       for (let c = renderFromCol; c < renderToCol; c += 1) {
         const key = `${r}-${c}`;
-        const { width } = colPositions[c];
+        const { x, width } = colPositions[c];
         if (!stuckCols[c] && !hiddenCellKeys.includes(key)) {
           const cell = { row: r, col: c, data: rows[r][c] };
           const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
@@ -492,17 +499,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               className={className}
               row={r}
               col={c}
-              left={left}
+              left={x}
               top={pos.y}
               width={altSize.width || width}
               height={altSize.height || pos.height}
+              naturalHeightRow={pos.height === -1 ? r : undefined}
+              naturalWidthCol={width === -1 ? c : undefined}
               draggable={draggable}
             >
               {renderCell(cell.data, cell)}
             </CellElement>,
           );
         }
-        left += width;
       }
       stuckRowsHeight += pos.height;
     });
@@ -511,9 +519,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     let stuckColsWidth = 0;
     Object.entries(stuckCols).forEach(([col, pos]) => {
       const c = Number(col);
-      let top = 0;
       for (let r = renderFromRow; r < renderToRow; r += 1) {
-        const { height } = rowPositions[r];
+        const { y, height } = rowPositions[r];
         if (!stuckRows[r]) {
           const key = `${r}-${c}`;
           if (!hiddenCellKeys.includes(key)) {
@@ -527,9 +534,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 row={r}
                 col={c}
                 left={pos.x}
-                top={top}
+                top={y}
                 width={altSize.width || pos.width}
                 height={altSize.height || height}
+                naturalHeightRow={height === -1 ? r : undefined}
+                naturalWidthCol={pos.width === -1 ? c : undefined}
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
@@ -537,20 +546,17 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             );
           }
         }
-        top += height;
       }
       stuckColsWidth += pos.width;
     });
 
     const stuckCellElmnts: ReactElement[] = [];
-    top = 0;
     Object.entries(stuckRows).forEach(([row, rowPos]) => {
       const r = Number(row);
-      const { height } = rowPos;
-      let left = 0;
+      const { y, height } = rowPos;
       Object.entries(stuckCols).forEach(([col, colPos]) => {
         const c = Number(col);
-        const { width } = colPos;
+        const { x, width } = colPos;
         const cell = { row: r, col: c, data: rows[r][c] };
         const className = cellClassName ? cellClassName(cell) : undefined;
         const key = `${r}-${c}`;
@@ -560,68 +566,55 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             className={className}
             row={r}
             col={c}
-            left={left}
-            top={top}
+            left={x}
+            top={y}
             width={width}
             height={height}
+            naturalHeightRow={height === -1 ? r : undefined}
+            naturalWidthCol={width === -1 ? c : undefined}
             draggable={draggable}
           >
             {renderCell(cell.data, cell)}
           </CellElement>,
         );
-        left += width;
       });
-      top += height;
     });
 
-    const cellsElmntWidth =
-      renderToCol > 0
-        ? colPositions[renderToCol - 1].x + colPositions[renderToCol - 1].width - colPositions[renderFromCol].x
-        : 0;
-    const cellsElmntHeight =
-      renderToRow > 0
-        ? rowPositions[renderToRow - 1].y + rowPositions[renderToRow - 1].height - rowPositions[renderFromRow].y
-        : 0;
-
-    // TODO: touch events
-
-    const onWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
-      performance.mark('wheel');
-      gridLayoutRef.current.moveWindowBy(event.deltaX, event.deltaY);
-    }, []);
+    const gridSize = gridLayoutRef.current.getGridSize();
 
     return (
-      <Root
-        ref={rootElmntRef}
-        id={scrollerId}
-        style={style}
-        className={className}
-        onWheel={scrollEventSource ? undefined : onWheel}
-      >
-        <Cells ref={cellsElmntRef} className={`${scrollerId}-cells`}>
+      <Root ref={rootElmntRef} id={scrollerId} style={style} className={className}>
+        <Cells
+          ref={cellsElmntRef}
+          className={`${scrollerId}-cells`}
+          style={{
+            width: px(gridSize.width),
+            height: px(gridSize.height),
+          }}
+        >
           {cellElmnts}
         </Cells>
         {stuckRowCellElmnts.length > 0 && (
-          <StuckRowCells
+          <StuckCells
             ref={stuckRowCellsElmntRef}
-            className={`${scrollerId}-cells`}
-            style={{ height: px(stuckRowsHeight), width: px(cellsElmntWidth) }}
+            className={`${scrollerId}-cells stickyRows`}
+            style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
           >
             {stuckRowCellElmnts}
-          </StuckRowCells>
+          </StuckCells>
         )}
         {stuckColCellElmnts.length > 0 && (
-          <StuckColCells
+          <StuckCells
             ref={stuckColCellsElmntRef}
-            className={`${scrollerId}-cells`}
-            style={{ width: px(stuckColsWidth), height: px(cellsElmntHeight) }}
+            className={`${scrollerId}-cells stickyCols`}
+            style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
           >
             {stuckColCellElmnts}
-          </StuckColCells>
+          </StuckCells>
         )}
         {stuckCellElmnts.length > 0 && (
           <StuckCells
-            className={`${scrollerId}-cells`}
+            className={`${scrollerId}-cells stickyCells`}
             style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
           >
             {stuckCellElmnts}
@@ -642,27 +635,12 @@ const Cells = styled.div`
   will-change: transform;
 `;
 
-const StuckRowCells = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  will-change: transform;
-  background: inherit;
-`;
-
-const StuckColCells = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  will-change: transform;
-  background: inherit;
-`;
-
 const StuckCells = styled.div`
   position: absolute;
   top: 0;
   left: 0;
   background: inherit;
+  will-change: transform;
 `;
 
 const CellRoot = styled.div`
@@ -680,23 +658,26 @@ const CellElement: FC<{
   left: number;
   width: number;
   height: number;
+  naturalHeightRow?: number;
+  naturalWidthCol?: number;
   draggable: boolean;
   children: ReactNode;
-}> = ({ className, row, col, top, left, width, height, draggable, children }) => (
-  <CellRoot
-    className={[`r${row}`, `c${col}`, className].filter(Boolean).join(' ')}
-    draggable={draggable || undefined}
-    data-natural-height-row={height === -1 ? row : undefined}
-    data-natural-width-col={width === -1 ? col : undefined}
-    style={{
-      top: px(top),
-      left: px(left),
-      width: px(width),
-      height: px(height),
-    }}
-  >
-    {children}
-  </CellRoot>
+}> = memo(
+  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => (
+    <CellRoot
+      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
+      draggable={draggable || undefined}
+      data-natural-height-row={naturalHeightRow}
+      data-natural-width-col={naturalWidthCol}
+      style={{
+        transform: `translate(${px(left)}, ${px(top)})`,
+        width: px(width),
+        height: px(height),
+      }}
+    >
+      {children}
+    </CellRoot>
+  ),
 );
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
@@ -762,11 +743,33 @@ const cellFromEvent = (event: Event, rows: unknown[][], cellsClassName: string):
   }
 };
 
+const mayUsePassive = (() => {
+  try {
+    let supportsPassive = false;
+    const opts = Object.defineProperty({}, 'passive', {
+      get(): boolean {
+        supportsPassive = true;
+        return true;
+      },
+    });
+    const fn = () => {
+      return;
+    };
+    window.addEventListener('testPassive', fn, opts);
+    window.removeEventListener('testPassive', fn, opts);
+    return supportsPassive;
+  } catch (err) {
+    return false;
+  }
+})();
+
 window.addEventListener('keypress', event => {
   if (event.key === 'p') {
+    console.log('================ PERF STATS ================');
     printStats('wheel');
     printStats('render');
-    printStats('update');
+    printStats('translate');
+    printStats('updateCellsRect');
     performance.clearMarks();
   }
 });

@@ -4,9 +4,9 @@ import { Scroller } from '../src';
 
 const rows: string[][] = [];
 
-for (let r = 0; r < 100; r++) {
+for (let r = 0; r < 1000; r++) {
   const row: string[] = [];
-  for (let c = 0; c < 100; c++) {
+  for (let c = 0; c < 1000; c++) {
     row.push(`${c}-${r}`);
   }
   rows.push(row);
@@ -235,44 +235,3 @@ export const GridWithArrowScroll: FC = () => (
     <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} arrowScrollAmount={50} />
   </>
 );
-
-// export const GridTheWorks: FC = () => (
-//   <>
-//     <style>{theStyle}</style>
-//     <p>Hold ALT-CMD while scrolling to show the window overflow.</p>
-//     <Scroller
-//       style={{ height: '500px', marginTop: '50px', backgroundColor: '#ddd' }}
-//       rows={rows}
-//       cellClassName="theCell"
-//       colWidth={c => (c === 3 ? 'natural' : 100)}
-//       stickyRows={[1, 3, 17]}
-//       stickyCols={[0, 5, 10, 15]}
-//       suppressHScrollRows={[10, 11]}
-//       cellSpans={[
-//         { row: 1, col: 20, rows: 1, cols: 10 },
-//         { row: 10, col: 0, rows: 1, cols: 'fitWindow' },
-//         { row: 20, col: 20, rows: 3, cols: 3 },
-//       ]}
-//       fixedMarginContent={{
-//         top: {
-//           height: 50,
-//           node: <div style={{ backgroundColor: 'pink', height: '50px' }}>Bubba</div>,
-//         },
-//       }}
-//     >
-//       {(cell, { row, col }) =>
-//         row === 1 ? (
-//           <div style={{ backgroundColor: '#eee', width: '100%', height: '100%' }}>Big Header</div>
-//         ) : (row === 20 && col === 20) || (row === 10 && col === 0) ? (
-//           <div key="spanner" className="spanner">
-//             {cell}
-//           </div>
-//         ) : col === 3 ? (
-//           <div style={{ whiteSpace: 'nowrap', minWidth: `50px` }}>{cell}</div>
-//         ) : (
-//           <>{cell}</>
-//         )
-//       }
-//     </Scroller>
-//   </>
-// );

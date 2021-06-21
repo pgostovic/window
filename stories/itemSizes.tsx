@@ -45,7 +45,7 @@ export const ItemSizes: FC = () => {
         initScrollPosition={offset}
       >
         {(num: number, { row }) => (
-          <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+          <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center', height: '100%' }}>
             <span style={{ flex: 1 }}>{num}</span>
             <span style={{ fontSize: 'small', color: '#999' }}>{slicedSizes[row]}px</span>
           </div>

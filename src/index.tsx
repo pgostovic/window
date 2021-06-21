@@ -1,1 +1,1 @@
-export * from './Scroller';
+export * from './GridScroller';
