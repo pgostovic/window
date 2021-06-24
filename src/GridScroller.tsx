@@ -141,7 +141,10 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const cellsElmntRef = createRef<HTMLDivElement>();
     const stuckRowCellsElmntRef = createRef<HTMLDivElement>();
     const stuckColCellsElmntRef = createRef<HTMLDivElement>();
+    const rafPidRef = useRef(0);
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
+
+    // console.log('RENDER', gridLayoutRef.current);
 
     // State
     const [windowCellsRect, setWindowCellsRect] = useState<WindowCellsRect>({ row: 0, col: 0, numRows: 0, numCols: 0 });
@@ -149,6 +152,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const [stuckCols, setStuckCols] = useState<StuckCols>({});
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
     const [colWidthOverrides, setColWidthOverrides] = useState<SizeOverrides>({});
+
+    /** Convert to 2d array if rows were supplied as a 1d array. */
+    const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
 
     /** Range of cells to render. */
     const renderFromRow = windowCellsRect.row;
@@ -158,9 +164,6 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     /** Unique id for this scroller. */
     const scrollerId = useMemo(() => scrollerIdIter.next().value as string, []);
-
-    /** Convert to 2d array if rows were supplied as a 1d array. */
-    const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
 
     /** Number of rows of data. */
     const numRows = rows.length;
@@ -184,14 +187,12 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       return gridLayout.getColPositions();
     }, [rows, colWidth, colWidthOverrides, gridLayoutRef.current.getWindowRect().width]);
 
+    const isVerticallyScrollable = gridLayoutRef.current.getScrollability().vertical;
+    const isHorizontallyScrollable = gridLayoutRef.current.getScrollability().horizontal;
+
     gridLayoutRef.current.setStickyRows(stickyRows);
     gridLayoutRef.current.setStickyCols(stickyCols);
 
-    const rafPidRef = useRef(0);
-
-    /**
-     * TODO: memoize with useCallback()? I think it's not needed.
-     */
     gridLayoutRef.current.updateHandler = ({ translate, cellsRect, stuckCols, stuckRows }) => {
       const cellsElmnt = cellsElmntRef.current;
       const stuckRowCellsElmnt = stuckRowCellsElmntRef.current;
@@ -306,7 +307,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     // const listenerOptions = mayUsePassive ? { passive: false } : false;
     useEffect(() => {
       const sourceElmnt = scrollEventSource || rootElmntRef.current;
-      if (sourceElmnt) {
+      if (sourceElmnt && (isVerticallyScrollable || isHorizontallyScrollable)) {
         const onWheel = (event: WheelEvent) => {
           event.preventDefault();
           performance.mark('wheel');
@@ -368,7 +369,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           sourceElmnt.removeEventListener('touchend', onTouchEnd);
         };
       }
-    }, [scrollEventSource]);
+    }, [scrollEventSource, isVerticallyScrollable, isHorizontallyScrollable]);
 
     /**
      * Handle cell events
