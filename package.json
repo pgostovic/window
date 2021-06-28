@@ -1,6 +1,6 @@
 {
   "name": "@phnq/window",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Virtual scrolling",
   "main": "index.js",
   "module": "index.es.js",
