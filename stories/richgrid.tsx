@@ -1,5 +1,6 @@
 import faker from 'faker';
 import React, { FC, memo } from 'react';
+import styled from 'styled-components';
 
 import { Scroller } from '../src';
 
@@ -26,6 +27,26 @@ for (let i = 0; i < 1000; i += 1) {
 
 const peopleArray = people.map(p => [p.email, p.id, p.firstName, p.lastName, p.department, p.phone]);
 
+// const cellStyle = {
+//   height: '100%',
+//   width: '100%',
+//   borderBottom: '1px solid #ccc',
+//   display: 'flex',
+//   alignItems: 'center',
+//   overflow: 'hidden',
+//   padding: '0 10px',
+// };
+
+const Cell = styled.div`
+  height: 100%;
+  width: 100%;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 10px;
+`;
+
 export const RichGrid: FC = () => (
   <>
     <Scroller
@@ -35,21 +56,7 @@ export const RichGrid: FC = () => (
       stickyCols={[0]}
       colWidth={c => (c === 0 ? { flex: 1, min: 250 } : 130)}
     >
-      {(data, { col }) => (
-        <div
-          style={{
-            height: '100%',
-            width: '100%',
-            borderBottom: '1px solid #ccc',
-            display: 'flex',
-            alignItems: 'center',
-            overflow: 'hidden',
-            padding: '0 10px',
-          }}
-        >
-          {col === 2 ? <Email email={data as string} /> : data}
-        </div>
-      )}
+      {(data, { col }) => <Cell>{col === 2 ? <Email email={data as string} /> : data}</Cell>}
     </Scroller>
   </>
 );

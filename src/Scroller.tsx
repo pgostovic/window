@@ -3,8 +3,10 @@ import React, {
   CSSProperties,
   FC,
   forwardRef,
-  KeyboardEvent,
+  memo,
   MutableRefObject,
+  Profiler,
+  ProfilerProps,
   ReactElement,
   ReactNode,
   useCallback,
@@ -17,12 +19,17 @@ import React, {
 import ResizeObserver from 'resize-observer-polyfill';
 import styled from 'styled-components';
 
+import FixedMargin, { FixedMarginProps } from './FixedMargin';
+import GridLayout, { WindowCellsRect } from './GridLayout';
+import Scheduler from './Scheduler';
+
 const DEFAULT_ROW_HEIGHT = 40;
 const DEFAULT_COL_WIDTH = () => ({ flex: 1, min: 80 });
-const DEFAULT_RENDER_BATCH_SIZE = 1;
-const DEFAULT_RENDER_THRESHOLD = 1;
 
-const scrollerClassIter = (function* nameGen(): IterableIterator<string> {
+const SCHEDULE_KEY_MOVE_WINDOW = 'movewindow';
+const SCHEDULE_KEY_SIZE_WINDOW = 'sizewindow';
+
+const scrollerIdIter = (function* nameGen(): IterableIterator<string> {
   let i = 0;
   while (true) {
     i += 1;
@@ -30,34 +37,10 @@ const scrollerClassIter = (function* nameGen(): IterableIterator<string> {
   }
 })();
 
-interface FlexSize {
-  flex: number;
-  min: number;
-}
-type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
-
-interface SizeOverrides {
-  [key: number]: number;
-}
-
-export interface Cell {
-  row: number;
-  col: number;
-  data: unknown;
-}
-
-interface CellSpan {
-  row: number;
-  col: number;
-  rows: number;
-  cols: number;
-}
-
 export interface ScrollerRef {
   scrollTo(cell: unknown): void;
   scrollTo(row: number, column: number): void;
   getScrollPosition(): { left: number; top: number };
-  getMaxScrollPosition(): { left: number; top: number };
   setScrollPosition(offset: { left: number; top: number }): void;
 }
 
@@ -81,6 +64,38 @@ export type EventType =
   | 'mouseover'
   | 'mouseup';
 
+interface FlexSize {
+  flex: number;
+  min: number;
+}
+type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
+
+interface CellSpan {
+  row: number;
+  col: number;
+  rows: number;
+  cols: number;
+}
+
+export interface Cell {
+  row: number;
+  col: number;
+  data: unknown;
+}
+
+interface SizeOverrides {
+  [key: number]: number;
+}
+
+interface TouchInfo {
+  t: number;
+  x: number;
+  dx: number;
+  y: number;
+  dy: number;
+  pid?: NodeJS.Timeout;
+}
+
 interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
@@ -88,21 +103,17 @@ interface Props {
   stickyRows?: number[];
   stickyCols?: number[];
   cellSpans?: CellSpan[];
-  fixedMarginContent?: {
-    top?: { height: number; node: ReactNode };
-    bottom?: { height: number; node: ReactNode };
-    left?: { width: number; node: ReactNode };
-    right?: { width: number; node: ReactNode };
-  };
+  fixedMargin?: FixedMarginProps;
   initPosition?: { row: number; col: number };
   initScrollPosition?: { left: number; top: number };
   arrowScrollAmount?: number | { x: number; y: number };
+  allowDiagnonal?: boolean;
+  scrollSpeed?: number;
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   scrollEventSource?: HTMLElement;
-  renderBatchSize?: number;
-  renderThreshold?: number;
   cellClassName?(cell: Cell): string;
+  logPerfStats?: boolean;
   children?(data: unknown, cell: Cell): ReactNode;
   style?: CSSProperties;
   className?: string;
@@ -117,237 +128,284 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       stickyRows = [],
       stickyCols = [],
       cellSpans = [],
-      fixedMarginContent,
+      fixedMargin,
       initPosition,
-      initScrollPosition = { left: 0, top: 0 },
-      arrowScrollAmount,
       cellEventTypes = [],
       onCellEvent,
+      initScrollPosition = { left: 0, top: 0 },
+      arrowScrollAmount,
+      allowDiagnonal = false,
+      scrollSpeed = 1,
       scrollEventSource,
-      renderBatchSize = DEFAULT_RENDER_BATCH_SIZE,
-      renderThreshold = DEFAULT_RENDER_THRESHOLD,
       cellClassName,
+      logPerfStats = false,
       children: renderCell = data => data as ReactNode,
       style,
       className,
     },
-    r,
+    ref,
   ) => {
-    const ref = r as MutableRefObject<ScrollerRef> | undefined;
-    const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
+    if (logPerfStats) {
+      performance.mark('render');
+    }
+
+    // Refs
+    const schedulerRef = useRef(new Scheduler());
+    const gridLayoutRef = useRef(new GridLayout());
     const rootElmntRef = createRef<HTMLDivElement>();
-    const rootElmntClassName = useMemo(() => scrollerClassIter.next().value as string, []);
-    const resizePidRef = useRef<NodeJS.Timeout>();
-    const scrollerSizeRef = useRef({ width: 0, height: 0 });
-    const scrollPositionRef = useRef(initScrollPosition);
-    const renderWindowRef = useRef({ fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 });
-    const paddingRef = useRef({
-      left: fixedMarginContent?.left?.width || 0,
-      right: fixedMarginContent?.right?.width || 0,
-      top: fixedMarginContent?.top?.height || 0,
-      bottom: fixedMarginContent?.bottom?.height || 0,
-    });
-    const stuckRowsRef = useRef<number[]>([]);
-    const stuckColsRef = useRef<number[]>([]);
+    const cellsElmntRef = createRef<HTMLDivElement>();
+    const stuckRowCellsElmntRef = createRef<HTMLDivElement>();
+    const stuckColCellsElmntRef = createRef<HTMLDivElement>();
+    const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
+
+    // State
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
     const [colWidthOverrides, setColWidthOverrides] = useState<SizeOverrides>({});
     const [, render] = useState(false);
 
-    // console.log('RENDER', renderWindowRef.current);
+    /** Convert to 2d array if rows were supplied as a 1d array. */
+    const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
 
-    paddingRef.current = {
-      left: fixedMarginContent?.left?.width || 0,
-      right: fixedMarginContent?.right?.width || 0,
-      top: fixedMarginContent?.top?.height || 0,
-      bottom: fixedMarginContent?.bottom?.height || 0,
-    };
+    /** Unique id for this scroller. */
+    const scrollerId = useMemo(() => scrollerIdIter.next().value as string, []);
 
-    const cellsRegion = {
-      width: scrollerSizeRef.current.width - paddingRef.current.left - paddingRef.current.right,
-      height: scrollerSizeRef.current.height - paddingRef.current.top - paddingRef.current.bottom,
-    };
-
-    const getRootElmnt = () => rootElmntRef.current || document.querySelector(`.${rootElmntClassName} `);
-
-    const getScrollableElmnts = () => {
-      const cellsElmnt = getRootElmnt()?.firstElementChild;
-      const stuckRowsElmnt = cellsElmnt?.nextElementSibling;
-      const stuckColsElmnt = stuckRowsElmnt?.nextElementSibling;
-      return { cellsElmnt, stuckRowsElmnt, stuckColsElmnt };
-    };
-
+    /** Number of rows of data. */
     const numRows = rows.length;
-    const numCols = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
-    const scrollerRef: ScrollerRef = {
-      scrollTo(...args: unknown[]) {
-        if (args.length === 1) {
-          const [cell] = args;
-          if (numCols === 1) {
-            const row = rows.findIndex(cells => cells.includes(cell));
-            if (row !== -1) {
-              const col = rows[row].indexOf(cell);
-              if (col !== -1) {
-                this.scrollTo(row, col);
+    /** Number of columns of data. */
+    const numCols = useMemo(() => rows.reduce((max, row) => Math.max(max, row.length), 0), [rows]);
+
+    /** Row positions -- height and y location of each row. */
+    const rowPositions = useMemo(() => {
+      const gridLayout = gridLayoutRef.current;
+      const heights = calculateSizes(rowHeight, numRows, gridLayout.getWindowRect().height, rowHeightOverrides);
+      gridLayout.setRowHeights(heights);
+      return gridLayout.getRowPositions();
+    }, [rows, rowHeight, rowHeightOverrides, gridLayoutRef.current.getWindowRect().height]);
+
+    /** Col positions -- width and x location of each column. */
+    const colPositions = useMemo(() => {
+      const gridLayout = gridLayoutRef.current;
+      const widths = calculateSizes(colWidth, numCols, gridLayout.getWindowRect().width, colWidthOverrides);
+      gridLayout.setColWidths(widths);
+      return gridLayout.getColPositions();
+    }, [rows, colWidth, colWidthOverrides, gridLayoutRef.current.getWindowRect().width]);
+
+    const isVerticallyScrollable = gridLayoutRef.current.getScrollability().vertical;
+    const isHorizontallyScrollable = gridLayoutRef.current.getScrollability().horizontal;
+
+    /** Configure the GridLayout instance with prop values. */
+    gridLayoutRef.current.allowDiagnonal = allowDiagnonal;
+    gridLayoutRef.current.setStickyRows(stickyRows);
+    gridLayoutRef.current.setStickyCols(stickyCols);
+
+    /** Assign the updateHandler. */
+    gridLayoutRef.current.updateHandler = (translate, { cells, stuckCols, stuckRows }, force) => {
+      const cellsElmnt = cellsElmntRef.current;
+      const stuckRowCellsElmnt = stuckRowCellsElmntRef.current;
+      const stuckColCellsElmnt = stuckColCellsElmntRef.current;
+
+      if (logPerfStats) {
+        performance.mark('translate');
+      }
+
+      if (cellsElmnt) {
+        cellsElmnt.style.transform = `translate(${translate.x}px, ${translate.y}px)`;
+      }
+      if (stuckRowCellsElmnt) {
+        stuckRowCellsElmnt.style.transform = `translateX(${translate.x}px)`;
+      }
+      if (stuckColCellsElmnt) {
+        stuckColCellsElmnt.style.transform = `translateY(${translate.y}px)`;
+      }
+
+      if (cells || stuckCols || stuckRows) {
+        schedulerRef.current.throttle('render', force ? 0 : 50, () => {
+          render(r => !r);
+        });
+      }
+
+      if (logPerfStats) {
+        schedulerRef.current.debounce('printStats', 1000, () => {
+          printStats(renderDurationsRef.current);
+          renderDurationsRef.current = [];
+        });
+      }
+    };
+
+    /**
+     * Get some GridLayout state for the current render.
+     */
+    const stuckRows = gridLayoutRef.current.getStuckRows();
+    const stuckCols = gridLayoutRef.current.getStuckCols();
+    const { fromRow, toRow, fromCol, toCol } = getRenderRange(
+      gridLayoutRef.current.getWindowCellsRect(),
+      numRows,
+      numCols,
+    );
+
+    /**
+     * Programmatic API for Scroller.
+     */
+    const scrollerApi: ScrollerRef = useMemo(
+      () => ({
+        scrollTo(...args: unknown[]) {
+          if (args.length === 1) {
+            const [cell] = args;
+            if (numCols === 1) {
+              const row = rows.findIndex(cells => cells.includes(cell));
+              if (row !== -1) {
+                const col = rows[row].indexOf(cell);
+                if (col !== -1) {
+                  this.scrollTo(row, col);
+                }
               }
             }
+          } else {
+            const [row, col] = args as [number, number];
+            this.setScrollPosition({ left: colPositions[col].x, top: rowPositions[row].y });
           }
-        } else {
-          const [row, col] = args as [number, number];
-          this.setScrollPosition({ left: colOffsets[col], top: rowOffsets[row] });
-        }
-      },
-      getScrollPosition() {
-        return scrollPositionRef.current;
-      },
-      getMaxScrollPosition() {
-        return maxOffset;
-      },
-      setScrollPosition(scrollPosition) {
-        const { cellsElmnt } = getScrollableElmnts();
-        if (cellsElmnt) {
-          cellsElmnt.scrollTop = scrollPosition.top;
-          cellsElmnt.scrollLeft = scrollPosition.left;
-          updateOffset(cellsElmnt);
-        }
-      },
-    };
+        },
+        getScrollPosition() {
+          const { x, y } = gridLayoutRef.current.getWindowRect();
+          return { left: x, top: y };
+        },
+        setScrollPosition(scrollPosition) {
+          gridLayoutRef.current.moveWindow(scrollPosition.left, scrollPosition.top);
+        },
+      }),
+      [rows, colPositions, rowPositions],
+    );
 
     if (ref) {
-      ref.current = scrollerRef;
+      (ref as MutableRefObject<ScrollerRef>).current = scrollerApi;
     }
 
     /**
-     * Need to memoize these because they're used in `updateOffset` below, which is wrapped in
-     * useCallback(). `updateOffset` gets called very frequently.
-     * NOTE: `rowHeight` and `colWidth` are not listed as dependencies because they are
-     * likely defined as inline props.
+     * Force a layout refresh when rows change.
      */
-    const rowHeights = useMemo(() => calculateSizes(rowHeight, numRows, cellsRegion.height, rowHeightOverrides), [
-      numRows,
-      cellsRegion.height,
-      rowHeightOverrides,
-    ]);
-    const rowOffsets = useMemo(() => calculateOffsets(rowHeights, rowHeightOverrides), [
-      rowHeights,
-      rowHeightOverrides,
-    ]);
-    const colWidths = useMemo(() => calculateSizes(colWidth, numCols, cellsRegion.width, colWidthOverrides), [
-      numCols,
-      cellsRegion.width,
-      colWidthOverrides,
-    ]);
-    const colOffsets = useMemo(() => calculateOffsets(colWidths, colWidthOverrides), [colWidths, colWidthOverrides]);
-
-    const totalSize = {
-      width: numCols === 0 ? 0 : colOffsets[numCols - 1] + colWidths[numCols - 1],
-      height: numRows === 0 ? 0 : rowOffsets[numRows - 1] + rowHeights[numRows - 1],
-    };
-
-    const maxOffset = {
-      left: Math.max(0, totalSize.width - cellsRegion.width),
-      top: Math.max(0, totalSize.height - cellsRegion.height),
-    };
-
-    const sortedStickyRows = useMemo(() => [...stickyRows].sort((a, b) => a - b), [stickyRows]);
-    const stickyRowOffsets = useMemo(
-      () =>
-        calculateOffsets(
-          sortedStickyRows.map(r => rowHeights[r]),
-          rowHeightOverrides,
-        ),
-      [sortedStickyRows, rowHeights, rowHeightOverrides],
-    );
-
-    const sortedStickyCols = useMemo(() => [...stickyCols].sort((a, b) => a - b), [stickyCols]);
-    const stickyColOffsets = useMemo(
-      () =>
-        calculateOffsets(
-          sortedStickyCols.map(c => colWidths[c]),
-          colWidthOverrides,
-        ),
-      [sortedStickyCols, colWidths, colWidthOverrides],
-    );
-
-    const stuckRowsHeight = stuckRowsRef.current.reduce((h, r) => h + rowHeights[r], 0);
-    const stuckColsWidth = stuckColsRef.current.reduce((w, c) => w + colWidths[c], 0);
-
-    // Handle sizing of the root element, which is the "window".
     useEffect(() => {
-      const rootElmnt = getRootElmnt();
-      const { cellsElmnt } = getScrollableElmnts();
-      if (rootElmnt && cellsElmnt) {
-        if (initPosition) {
-          cellsElmnt.scrollTop = rowOffsets[initPosition.row];
-          cellsElmnt.scrollLeft = colOffsets[initPosition.col];
-        } else {
-          cellsElmnt.scrollTop = initScrollPosition.top;
-          cellsElmnt.scrollLeft = initScrollPosition.left;
-        }
+      setRowHeightOverrides({});
+      setColWidthOverrides({});
+      gridLayoutRef.current.refresh();
+    }, [rows]);
+
+    // Detect initial and changes in root element size.
+    useEffect(() => {
+      const rootElmnt = rootElmntRef.current;
+      if (rootElmnt) {
+        schedulerRef.current.nextFrame(SCHEDULE_KEY_MOVE_WINDOW, () => {
+          if (initPosition) {
+            gridLayoutRef.current.moveWindow(colPositions[initPosition.col].x, rowPositions[initPosition.row].y);
+          } else {
+            gridLayoutRef.current.moveWindow(initScrollPosition.left, initScrollPosition.top);
+          }
+        });
 
         const detectSize = () => {
-          const { width, height } = rootElmnt.getBoundingClientRect();
-          if (height !== scrollerSizeRef.current.height || width !== scrollerSizeRef.current.width) {
-            scrollerSizeRef.current = { width, height };
-            updateOffset(cellsElmnt, true);
-          }
+          schedulerRef.current.nextFrame(SCHEDULE_KEY_SIZE_WINDOW, () => {
+            const { width, height } = rootElmnt.getBoundingClientRect();
+            gridLayoutRef.current.setWindowSize(width, height);
+          });
         };
 
-        // Initial detect size on mount.
         detectSize();
 
-        /**
-         * Also detect size when the root element is resized. Debounced to 100ms.
-         */
-        const resizeObserver = new ResizeObserver(() => {
-          if (resizePidRef.current) {
-            clearTimeout(resizePidRef.current);
-            resizePidRef.current = undefined;
-          } else {
-            detectSize();
-          }
-          resizePidRef.current = setTimeout(() => {
-            resizePidRef.current = undefined;
-            detectSize();
-          }, 100);
-        });
+        const resizeObserver = new ResizeObserver(detectSize);
         resizeObserver.observe(rootElmnt);
         return () => resizeObserver.unobserve(rootElmnt);
       }
     }, []);
 
     /**
-     * If a `scrollEventSource` is specified then a `wheel` event listener is added to it
-     * and the scrollable elements are scrolled based on the event's deltaX and deltaY.
+     * Set up listener(s) for scroll events. Desktop uses the `wheel` event. Events come from
+     * the rootElmnt by default, but an alternate `scrollEventSource` may be specified instead.
      */
     useEffect(() => {
-      if (scrollEventSource) {
-        const sourceElmnt = scrollEventSource;
-
+      const sourceElmnt = scrollEventSource || rootElmntRef.current;
+      if (sourceElmnt && (isVerticallyScrollable || isHorizontallyScrollable)) {
         const onWheel = (event: WheelEvent) => {
-          const { cellsElmnt } = getScrollableElmnts();
-          if (cellsElmnt) {
-            if (cellsElmnt.scrollBy) {
-              cellsElmnt.scrollBy(event.deltaX, event.deltaY);
-            } else {
-              cellsElmnt.scrollTop += event.deltaY;
-              cellsElmnt.scrollLeft += event.deltaX;
-            }
-            updateOffset();
+          const { deltaX, deltaY } = event;
+          if (logPerfStats) {
+            performance.mark('scroll');
           }
+          schedulerRef.current.nextFrame(SCHEDULE_KEY_MOVE_WINDOW, () =>
+            gridLayoutRef.current.moveWindowBy(deltaX * scrollSpeed, deltaY * scrollSpeed),
+          );
         };
 
-        sourceElmnt.addEventListener('wheel', onWheel);
-        return () => sourceElmnt.removeEventListener('wheel', onWheel);
-      }
-    }, [scrollEventSource]);
+        const onTouchStart = (event: TouchEvent) => {
+          if (touchInfoRef.current.pid) {
+            clearInterval(touchInfoRef.current.pid);
+            touchInfoRef.current.pid = undefined;
+          }
 
-    /**
-     * If the `rows` change, then recalulate the renderWindow.
-     */
-    useEffect(() => {
-      updateOffset();
-    }, [rows]);
+          const t = event.timeStamp;
+          const x = event.touches[0].clientX;
+          const y = event.touches[0].clientY;
+          touchInfoRef.current = { t, x, dx: 0, y, dy: 0 };
+        };
+
+        const onTouchMove = (event: TouchEvent) => {
+          const t = event.timeStamp;
+          const x = event.touches[0].clientX;
+          const dx = touchInfoRef.current.x - x;
+          const y = event.touches[0].clientY;
+          const dy = touchInfoRef.current.y - y;
+          if (logPerfStats) {
+            performance.mark('scroll');
+          }
+          schedulerRef.current.nextFrame(SCHEDULE_KEY_MOVE_WINDOW, () => gridLayoutRef.current.moveWindowBy(dx, dy));
+          touchInfoRef.current = { t, x, dx, y, dy };
+        };
+
+        const onTouchEnd = (event: TouchEvent) => {
+          const touchInfo = touchInfoRef.current;
+
+          const t = event.timeStamp;
+          let speedX = touchInfo.dx / (t - touchInfo.t);
+          let speedY = touchInfo.dy / (t - touchInfo.t);
+
+          const pid = setInterval(() => {
+            const dx = speedX * 16;
+            const dy = speedY * 16;
+            if (logPerfStats) {
+              performance.mark('scroll');
+            }
+            schedulerRef.current.nextFrame(SCHEDULE_KEY_MOVE_WINDOW, () => gridLayoutRef.current.moveWindowBy(dx, dy));
+            speedX = speedX * 0.95;
+            speedY = speedY * 0.95;
+            if (Math.abs(speedX) + Math.abs(speedY) < 0.01) {
+              clearInterval(pid);
+              touchInfoRef.current.pid = undefined;
+            }
+          }, 16);
+
+          touchInfoRef.current = { ...touchInfo, pid };
+        };
+
+        /**
+         * This handler is registered with `passive: false` so that `event.preventDefault()` can
+         * be called. This prevents the back/forward swipe navigation from happening.
+         */
+        const preventBack = (event: WheelEvent) => {
+          event.preventDefault();
+        };
+
+        sourceElmnt.addEventListener('wheel', onWheel, mayUsePassive ? { passive: true } : false);
+        sourceElmnt.addEventListener('wheel', preventBack, mayUsePassive ? { passive: false } : false);
+        sourceElmnt.addEventListener('touchstart', onTouchStart, mayUsePassive ? { passive: true } : false);
+        sourceElmnt.addEventListener('touchmove', onTouchMove, mayUsePassive ? { passive: true } : false);
+        sourceElmnt.addEventListener('touchend', onTouchEnd);
+        return () => {
+          sourceElmnt.removeEventListener('wheel', onWheel);
+          sourceElmnt.removeEventListener('wheel', preventBack);
+          sourceElmnt.removeEventListener('touchstart', onTouchStart);
+          sourceElmnt.removeEventListener('touchmove', onTouchMove);
+          sourceElmnt.removeEventListener('touchend', onTouchEnd);
+        };
+      }
+    }, [scrollEventSource, isVerticallyScrollable, isHorizontallyScrollable, scrollSpeed, logPerfStats]);
 
     /**
      * Handle cell events
@@ -368,7 +426,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
      */
     const currentHoverCell = useRef<Cell>();
     useEffect(() => {
-      const rootElmnt = getRootElmnt();
+      const rootElmnt = rootElmntRef.current;
       if (onCellEvent && rootElmnt) {
         const types = new Set<EventType>(
           cellEventTypes.includes('mouseenter') || cellEventTypes.includes('mouseleave')
@@ -377,7 +435,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         );
 
         const handler = (event: Event) => {
-          const cell = cellFromEvent(event, rows, `${rootElmntClassName}-cells`);
+          const cell = cellFromEvent(event, rows, `${scrollerId}-cells`);
           if (cell && types.has(event.type as EventType)) {
             if (
               (types.has('mouseenter') || types.has('mouseleave')) &&
@@ -399,7 +457,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           } else if (
             currentHoverCell.current &&
             event.type === 'mouseleave' &&
-            (event.target as Element).className.split(/\s+/).includes(rootElmntClassName)
+            (event.target as Element).id === scrollerId
           ) {
             if (cellEventTypes.includes('mouseleave')) {
               onCellEvent('mouseleave', currentHoverCell.current, event);
@@ -419,219 +477,114 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
      * and using the maximum. Similar for columns.
      */
     useLayoutEffect(() => {
-      const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
-
       let hasNewHeightOverrides = false;
       for (let r = fromRow; r < toRow && !hasNewHeightOverrides; r += 1) {
-        if (rowHeights[r] === -1 && rowHeightOverrides[r] === undefined) {
+        if (rowPositions[r].height === -1 && rowHeightOverrides[r] === undefined) {
           hasNewHeightOverrides = true;
         }
       }
       let hasNewWidthOverrides = false;
       for (let c = fromCol; c < toCol && !hasNewWidthOverrides; c += 1) {
-        if (colWidths[c] === -1 && colWidthOverrides[c] === undefined) {
+        if (colPositions[c].width === -1 && colWidthOverrides[c] === undefined) {
           hasNewWidthOverrides = true;
         }
       }
 
       if (hasNewHeightOverrides) {
         const hOverrides: SizeOverrides = {};
-        document.querySelectorAll(`.${rootElmntClassName}-cells > div[data-natural-height-row]`).forEach(cellElmnt => {
+        document.querySelectorAll(`.${scrollerId}-cells > div[data-natural-height-row]`).forEach(cellElmnt => {
           const row = Number(cellElmnt.getAttribute('data-natural-height-row'));
           const { height } = cellElmnt.getBoundingClientRect();
           hOverrides[row] = Math.max(hOverrides[row] || 0, height);
-          hasNewHeightOverrides = true;
         });
         setRowHeightOverrides(rho => ({ ...rho, ...hOverrides }));
       }
 
       if (hasNewWidthOverrides) {
         const wOverrides: SizeOverrides = {};
-        document.querySelectorAll(`.${rootElmntClassName}-cells > div[data-natural-width-col]`).forEach(cellElmnt => {
+        document.querySelectorAll(`.${scrollerId}-cells > div[data-natural-width-col]`).forEach(cellElmnt => {
           const col = Number(cellElmnt.getAttribute('data-natural-width-col'));
           const { width } = cellElmnt.getBoundingClientRect();
           wOverrides[col] = Math.max(wOverrides[col] || 0, width);
-          hasNewWidthOverrides = true;
         });
         setColWidthOverrides(cwo => ({ ...cwo, ...wOverrides }));
       }
     });
 
     /**
-     * Update Offset
-     * -------------
-     * The purpose of this function is to determine the current scroll offset of the root element
-     * and determine which cells should be rendered.
+     * Handle keyboard navigation with arrow keys, etc.
      */
-    const updateOffset = useCallback(
-      (source?: Element, forceRender = false) => {
-        const { cellsElmnt, stuckRowsElmnt, stuckColsElmnt } = getScrollableElmnts();
-
-        if (!cellsElmnt || !stuckRowsElmnt || !stuckColsElmnt) {
-          return;
-        }
-
-        const scrollableHeight =
-          scrollerSizeRef.current.height - paddingRef.current.top - paddingRef.current.bottom - stuckRowsHeight;
-        const scrollableWidth =
-          scrollerSizeRef.current.width - paddingRef.current.left - paddingRef.current.right - stuckColsWidth;
-
-        /**
-         * Sync the scroll positions to the source if specified.
-         */
-        if (source === cellsElmnt) {
-          stuckRowsElmnt.scrollLeft = cellsElmnt.scrollLeft;
-          stuckColsElmnt.scrollTop = cellsElmnt.scrollTop;
-        } else if (source === stuckRowsElmnt) {
-          cellsElmnt.scrollLeft = stuckRowsElmnt.scrollLeft;
-        } else if (source === stuckColsElmnt) {
-          cellsElmnt.scrollTop = stuckColsElmnt.scrollTop;
-        }
-
-        const { scrollLeft, scrollTop } = cellsElmnt;
-        const scrollBottom = scrollTop + scrollableHeight;
-        const scrollRight = scrollLeft + scrollableWidth;
-        let { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
-
-        if (forceRender) {
-          renderWindowRef.current = { fromRow: 0, toRow: 0, fromCol: 0, toCol: 0 };
-        }
-
-        scrollPositionRef.current = { left: scrollLeft, top: scrollTop };
-
-        /**
-         * Determine stuck rows and columns.
-         */
-        const stuckRows = sortedStickyRows.filter(
-          (r, i) => rowOffsets[r] - stickyRowOffsets[i] <= scrollPositionRef.current.top,
-        );
-        const stuckCols = sortedStickyCols.filter(
-          (c, i) => colOffsets[c] - stickyColOffsets[i] <= scrollPositionRef.current.left,
-        );
-
-        /**
-         * visibleFromRow, visibleFromCol, visibleToRow, visibleToCol
-         * These are the boundaries that indicate which cells should be visible, even partially.
-         */
-        const visibleFromRow = Math.max(0, rowOffsets.findIndex(rOff => rOff >= scrollTop) - renderThreshold);
-        const visibleFromCol = Math.max(0, colOffsets.findIndex(cOff => cOff >= scrollLeft) - renderThreshold);
-
-        let visibleToRow = rowOffsets.findIndex(rOff => rOff >= scrollBottom) + renderThreshold + stuckRows.length;
-        if (visibleToRow === renderThreshold - 1) {
-          visibleToRow = numRows;
-        }
-        let visibleToCol = colOffsets.findIndex(cOff => cOff >= scrollRight) + renderThreshold + stuckCols.length;
-        if (visibleToCol === renderThreshold - 1) {
-          visibleToCol = numCols;
-        }
-
-        /**
-         * Determine if render window needs to change. If the current render window does include
-         * all of the cells that should be visible then update the render window and render.
-         */
-        if (visibleFromRow < fromRow) {
-          fromRow = Math.max(0, visibleFromRow - renderBatchSize);
-          toRow = Math.min(numRows, visibleToRow);
-        }
-
-        if (visibleFromCol < fromCol) {
-          fromCol = Math.max(0, visibleFromCol - renderBatchSize);
-          toCol = Math.min(numCols, visibleToCol);
-        }
-
-        if (visibleToRow > toRow) {
-          toRow = Math.min(rowOffsets.length, visibleToRow + renderBatchSize);
-          fromRow = visibleFromRow;
-        }
-
-        if (visibleToCol > toCol) {
-          toCol = Math.min(colOffsets.length, visibleToCol + renderBatchSize);
-          fromCol = visibleFromCol;
-        }
-
-        /**
-         * If the expected render window is different from the current one, then set it and render.
-         */
-        if (
-          forceRender ||
-          fromRow !== renderWindowRef.current.fromRow ||
-          toRow !== renderWindowRef.current.toRow ||
-          fromCol !== renderWindowRef.current.fromCol ||
-          toCol !== renderWindowRef.current.toCol ||
-          !sameNumbers(stuckRows, stuckRowsRef.current) ||
-          !sameNumbers(stuckCols, stuckColsRef.current)
-        ) {
-          renderWindowRef.current = { fromRow, toRow, fromCol, toCol };
-          stuckRowsRef.current = stuckRows;
-          stuckColsRef.current = stuckCols;
-          render(r => !r);
-        }
-      },
-      [
-        rowOffsets,
-        colOffsets,
-        stickyRowOffsets,
-        stickyColOffsets,
-        numRows,
-        numCols,
-        sortedStickyRows,
-        sortedStickyCols,
-        stuckRowsHeight,
-        stuckColsWidth,
-      ],
-    );
-
-    /**
-     * Keydown event handler for the root element. This is used for:
-     * - scrolling with arrow keys.
-     */
-    const onKeyDown = useCallback(
-      (event: KeyboardEvent<HTMLDivElement>) => {
-        if (arrowScrollAmount) {
-          const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
-          const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
-          const currentPosition = scrollerRef.getScrollPosition();
-          switch (event.key) {
+    useEffect(() => {
+      const rootElmnt = rootElmntRef.current;
+      if (arrowScrollAmount && rootElmnt) {
+        const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
+        const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
+        const handleKey = (event: KeyboardEvent) => {
+          const gridLayout = gridLayoutRef.current;
+          let handled = true;
+          switch ([event.key, event.metaKey ? 'Meta' : undefined].filter(Boolean).join(':')) {
             case 'ArrowUp':
-              scrollerRef.setScrollPosition({ ...currentPosition, top: currentPosition.top - yScrollAmount });
+              gridLayout.moveWindowBy(0, -yScrollAmount);
               break;
             case 'ArrowDown':
-              scrollerRef.setScrollPosition({ ...currentPosition, top: currentPosition.top + yScrollAmount });
+              gridLayout.moveWindowBy(0, yScrollAmount);
               break;
             case 'ArrowLeft':
-              scrollerRef.setScrollPosition({ ...currentPosition, left: currentPosition.left - xScrollAmount });
+              gridLayout.moveWindowBy(-xScrollAmount, 0);
               break;
             case 'ArrowRight':
-              scrollerRef.setScrollPosition({ ...currentPosition, left: currentPosition.left + xScrollAmount });
+              gridLayout.moveWindowBy(xScrollAmount, 0);
+              break;
+            case 'PageUp':
+              gridLayout.pageUp();
+              break;
+            case 'PageDown':
+            case ' ': // Space
+              gridLayout.pageDown();
+              break;
+            case 'Home':
+            case 'ArrowUp:Meta':
+              gridLayout.moveToTop();
+              break;
+            case 'End':
+            case 'ArrowDown:Meta':
+              gridLayout.moveToBottom();
+              break;
+            case 'ArrowLeft:Meta':
+              gridLayout.moveToLeft();
+              break;
+            case 'ArrowRight:Meta':
+              gridLayout.moveToRight();
               break;
             default:
+              handled = false;
           }
+          if (handled) {
+            event.preventDefault();
+          }
+        };
+        rootElmnt.addEventListener('keydown', handleKey);
+        return () => {
+          rootElmnt.removeEventListener('keydown', handleKey);
+        };
+      }
+    }, [arrowScrollAmount]);
+
+    const getAltCellSize = (cell: Cell) => {
+      const cellSpan = cellSpans.find(({ row, col }) => row === cell.row && col === cell.col);
+      if (cellSpan) {
+        const { rows, cols } = cellSpan;
+        let height = 0;
+        for (let r = cell.row; r < cell.row + rows; r += 1) {
+          height += rowPositions[r].height;
         }
-      },
-      [arrowScrollAmount, maxOffset.left, maxOffset.top],
-    );
-
-    /**
-     * Make sure the renderWindow boundaries don't exceed the data boundaries. If the `rows` change then
-     * the correct renderWindow boundaries will be calculated in `updateOffset()` via an effect. This enforcement
-     * is to guard against array bounds errors during render, before the effect call.
-     */
-    renderWindowRef.current = enforceWindowRange(renderWindowRef.current, numRows, numCols);
-
-    const getCellSize = (cell: Cell) => {
-      const { rows, cols } = cellSpans.find(({ row, col }) => row === cell.row && col === cell.col) || {
-        rows: 1,
-        cols: 1,
-      };
-      let height = 0;
-      for (let r = cell.row; r < cell.row + rows; r += 1) {
-        height += rowHeights[r];
+        let width = 0;
+        for (let c = cell.col; c < cell.col + cols; c += 1) {
+          width += colPositions[c].width;
+        }
+        return { width, height };
       }
-      let width = 0;
-      for (let c = cell.col; c < cell.col + cols; c += 1) {
-        width += colWidths[c];
-      }
-      return { width, height };
+      return undefined;
     };
 
     const hiddenCellKeys = useMemo(
@@ -649,30 +602,33 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [cellSpans],
     );
 
-    const { fromRow, toRow, fromCol, toCol } = renderWindowRef.current;
+    const draggable = cellEventTypes.includes('dragstart');
 
+    /** Render the actual elements. */
     const cellElmnts: ReactElement[] = [];
     for (let r = fromRow; r < toRow; r += 1) {
-      const isStuckRow = stuckRowsRef.current.includes(r);
-      if (!isStuckRow) {
+      const { y, height } = rowPositions[r];
+      if (!stuckRows[r]) {
         for (let c = fromCol; c < toCol; c += 1) {
-          const isStuckCol = stuckColsRef.current.includes(c);
           const key = `${r}-${c}`;
-          if (!isStuckCol && !hiddenCellKeys.includes(key)) {
+          const { x, width } = colPositions[c];
+          if (!stuckCols[c] && !hiddenCellKeys.includes(key)) {
             const cell = { row: r, col: c, data: rows[r][c] };
+            const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
             const className = cellClassName ? cellClassName(cell) : undefined;
-            const { width, height } = getCellSize(cell);
             cellElmnts.push(
               <CellElement
                 key={key}
                 className={className}
-                draggable={cellEventTypes.includes('dragstart')}
                 row={r}
                 col={c}
-                top={rowOffsets[r] - stuckRowsHeight}
-                left={colOffsets[c] - stuckColsWidth}
-                height={height}
-                width={width}
+                left={x}
+                top={y}
+                width={altSize.width || width}
+                height={altSize.height || height}
+                naturalHeightRow={height === -1 ? r : undefined}
+                naturalWidthCol={width === -1 ? c : undefined}
+                draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
               </CellElement>,
@@ -683,245 +639,192 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     }
 
     const stuckRowCellElmnts: ReactElement[] = [];
-    const stuckRows = stuckRowsRef.current;
-    for (let i = 0; i < stuckRows.length; i += 1) {
-      const r = stuckRows[i];
-      const top = stickyRowOffsets[sortedStickyRows.indexOf(r)];
+    let stuckRowsHeight = 0;
+    Object.entries(stuckRows).forEach(([row, pos]) => {
+      const r = Number(row);
       for (let c = fromCol; c < toCol; c += 1) {
-        const isStuckCol = stuckColsRef.current.includes(c);
         const key = `${r}-${c}`;
-        if (!isStuckCol && !hiddenCellKeys.includes(key)) {
+        const { x, width } = colPositions[c];
+        if (!stuckCols[c] && !hiddenCellKeys.includes(key)) {
           const cell = { row: r, col: c, data: rows[r][c] };
+          const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
           const className = cellClassName ? cellClassName(cell) : undefined;
-          const { width, height } = getCellSize(cell);
           stuckRowCellElmnts.push(
             <CellElement
               key={key}
               className={className}
-              draggable={cellEventTypes.includes('dragstart')}
               row={r}
               col={c}
-              top={top}
-              left={colOffsets[c] - stuckColsWidth}
-              height={height}
-              width={width}
+              left={x}
+              top={pos.y}
+              width={altSize.width || width}
+              height={altSize.height || pos.height}
+              naturalHeightRow={pos.height === -1 ? r : undefined}
+              naturalWidthCol={width === -1 ? c : undefined}
+              draggable={draggable}
             >
               {renderCell(cell.data, cell)}
             </CellElement>,
           );
         }
       }
-    }
+      stuckRowsHeight += pos.height;
+    });
 
     const stuckColCellElmnts: ReactElement[] = [];
-    const stuckCols = stuckColsRef.current;
-    for (let i = 0; i < stuckCols.length; i += 1) {
-      const c = stuckCols[i];
-      const left = stickyColOffsets[sortedStickyCols.indexOf(c)];
+    let stuckColsWidth = 0;
+    Object.entries(stuckCols).forEach(([col, pos]) => {
+      const c = Number(col);
       for (let r = fromRow; r < toRow; r += 1) {
-        const isStuckRow = stuckRowsRef.current.includes(r);
-        const key = `${r}-${c}`;
-        if (!isStuckRow && !hiddenCellKeys.includes(key)) {
-          const cell = { row: r, col: c, data: rows[r][c] };
-          const className = cellClassName ? cellClassName(cell) : undefined;
-          const { width, height } = getCellSize(cell);
-          stuckColCellElmnts.push(
-            <CellElement
-              key={key}
-              className={className}
-              draggable={cellEventTypes.includes('dragstart')}
-              row={r}
-              col={c}
-              top={rowOffsets[r] - stuckRowsHeight}
-              left={left}
-              height={height}
-              width={width}
-            >
-              {renderCell(cell.data, cell)}
-            </CellElement>,
-          );
+        const { y, height } = rowPositions[r];
+        if (!stuckRows[r]) {
+          const key = `${r}-${c}`;
+          if (!hiddenCellKeys.includes(key)) {
+            const cell = { row: r, col: c, data: rows[r][c] };
+            const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
+            const className = cellClassName ? cellClassName(cell) : undefined;
+            stuckColCellElmnts.push(
+              <CellElement
+                key={key}
+                className={className}
+                row={r}
+                col={c}
+                left={pos.x}
+                top={y}
+                width={altSize.width || pos.width}
+                height={altSize.height || height}
+                naturalHeightRow={height === -1 ? r : undefined}
+                naturalWidthCol={pos.width === -1 ? c : undefined}
+                draggable={draggable}
+              >
+                {renderCell(cell.data, cell)}
+              </CellElement>,
+            );
+          }
         }
       }
-    }
+      stuckColsWidth += pos.width;
+    });
 
     const stuckCellElmnts: ReactElement[] = [];
-    for (let i = 0; i < stuckRows.length; i += 1) {
-      const r = stuckRows[i];
-      const top = stickyRowOffsets[sortedStickyRows.indexOf(r)];
-      for (let j = 0; j < stuckCols.length; j += 1) {
-        const c = stuckCols[j];
-        const left = stickyColOffsets[sortedStickyCols.indexOf(c)];
+    Object.entries(stuckRows).forEach(([row, rowPos]) => {
+      const r = Number(row);
+      const { y, height } = rowPos;
+      Object.entries(stuckCols).forEach(([col, colPos]) => {
+        const c = Number(col);
         const key = `${r}-${c}`;
-        if (!hiddenCellKeys.includes(key)) {
-          const cell = { row: r, col: c, data: rows[r][c] };
-          const className = cellClassName ? cellClassName(cell) : undefined;
-          const { width, height } = getCellSize(cell);
-          stuckCellElmnts.push(
-            <CellElement
-              key={key}
-              className={className}
-              draggable={cellEventTypes.includes('dragstart')}
-              row={r}
-              col={c}
-              top={top}
-              left={left}
-              height={height}
-              width={width}
-            >
-              {renderCell(cell.data, cell)}
-            </CellElement>,
-          );
-        }
-      }
-    }
+        const { x, width } = colPos;
+        const cell = { row: r, col: c, data: rows[r][c] };
+        const className = cellClassName ? cellClassName(cell) : undefined;
+        stuckCellElmnts.push(
+          <CellElement
+            key={key}
+            className={className}
+            row={r}
+            col={c}
+            left={x}
+            top={y}
+            width={width}
+            height={height}
+            naturalHeightRow={height === -1 ? r : undefined}
+            naturalWidthCol={width === -1 ? c : undefined}
+            draggable={draggable}
+          >
+            {renderCell(cell.data, cell)}
+          </CellElement>,
+        );
+      });
+    });
+
+    const gridSize = gridLayoutRef.current.getGridSize();
+
+    const renderDurationsRef = useRef<number[]>([]);
+
+    const onRender = useCallback((_id: string, _phase: 'mount' | 'update', actualDuration: number) => {
+      renderDurationsRef.current.push(actualDuration);
+    }, []);
 
     return (
-      <Root
-        ref={rootElmntRef}
-        className={[rootElmntClassName, className].filter(Boolean).join(' ')}
-        style={style}
-        padding={paddingRef.current}
-        stuckRowsHeight={stuckRowsHeight}
-        stuckColsWidth={stuckColsWidth}
-        tabIndex={arrowScrollAmount ? 0 : undefined}
-        onKeyDown={arrowScrollAmount ? onKeyDown : undefined}
-      >
-        <Cells onScroll={event => updateOffset(event.currentTarget)}>
-          <div
-            className={`${rootElmntClassName}-cells`}
-            style={{
-              position: 'relative',
-              width: px(totalSize.width - stuckColsWidth),
-              height: px(totalSize.height - stuckRowsHeight),
-            }}
-          >
-            {cellElmnts}
-          </div>
-        </Cells>
-        <StuckRows className="stickyRows" onScroll={event => updateOffset(event.currentTarget)}>
-          {stuckRowCellElmnts.length > 0 && (
-            <div
-              className={`${rootElmntClassName}-cells`}
+      <Prof enabled={logPerfStats} onRender={onRender}>
+        <FixedMargin style={style} className={className} {...fixedMargin}>
+          <Root ref={rootElmntRef} id={scrollerId} tabIndex={arrowScrollAmount ? 0 : undefined}>
+            <Cells
+              ref={cellsElmntRef}
+              className={`${scrollerId}-cells`}
               style={{
-                position: 'relative',
-                width: px(totalSize.width),
-                height: px(stuckRowsHeight),
+                width: px(gridSize.width),
+                height: px(gridSize.height),
               }}
             >
-              {stuckRowCellElmnts}
-            </div>
-          )}
-        </StuckRows>
-        <StuckCols className="stickyCols" onScroll={event => updateOffset(event.currentTarget)}>
-          {stuckColCellElmnts.length > 0 && (
-            <div
-              className={`${rootElmntClassName}-cells`}
-              style={{
-                position: 'relative',
-                width: px(stuckColsWidth),
-                height: px(totalSize.height),
-              }}
-            >
-              {stuckColCellElmnts}
-            </div>
-          )}
-        </StuckCols>
-        <StuckCells className={`${rootElmntClassName}-cells stickyCells`}>{stuckCellElmnts}</StuckCells>
-        <FixedTop>{fixedMarginContent?.top?.node}</FixedTop>
-        <FixedLeft>{fixedMarginContent?.left?.node}</FixedLeft>
-        <FixedRight>{fixedMarginContent?.right?.node}</FixedRight>
-        <FixedBottom>{fixedMarginContent?.bottom?.node}</FixedBottom>
-      </Root>
+              {cellElmnts}
+            </Cells>
+            {stuckRowCellElmnts.length > 0 && (
+              <StuckCells
+                ref={stuckRowCellsElmntRef}
+                className={`${scrollerId}-cells stickyRows`}
+                style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
+              >
+                {stuckRowCellElmnts}
+              </StuckCells>
+            )}
+            {stuckColCellElmnts.length > 0 && (
+              <StuckCells
+                ref={stuckColCellsElmntRef}
+                className={`${scrollerId}-cells stickyCols`}
+                style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
+              >
+                {stuckColCellElmnts}
+              </StuckCells>
+            )}
+            {stuckCellElmnts.length > 0 && (
+              <StuckCells
+                className={`${scrollerId}-cells stickyCells`}
+                style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
+              >
+                {stuckCellElmnts}
+              </StuckCells>
+            )}
+          </Root>
+        </FixedMargin>
+      </Prof>
     );
   },
 );
 
-const Root = styled.div<{
-  padding: { left: number; top: number; right: number; bottom: number };
-  stuckRowsHeight: number;
-  stuckColsWidth: number;
-}>`
+const Prof: FC<{ enabled: boolean; onRender: ProfilerProps['onRender'] }> = ({ enabled, onRender, children }) =>
+  enabled ? (
+    <Profiler onRender={onRender} id="scroller">
+      {children}
+    </Profiler>
+  ) : (
+    <>{children}</>
+  );
+
+const Root = styled.div`
   position: relative;
   overflow: hidden;
-  display: grid;
-  grid-template-columns: ${({ padding }) => px(padding.left)} ${({ stuckColsWidth }) => px(stuckColsWidth)} 1fr ${({
-      padding,
-    }) => px(padding.right)};
-  grid-template-rows: ${({ padding }) => px(padding.top)} ${({ stuckRowsHeight }) => px(stuckRowsHeight)} 1fr ${({
-      padding,
-    }) => px(padding.bottom)};
-  grid-template-areas:
-    'fixedTop fixedTop fixedTop fixedTop'
-    'fixedLeft stuckCells stuckRows fixedRight'
-    'fixedLeft stuckCols cells fixedRight'
-    'fixedBottom fixedBottom fixedBottom fixedBottom';
+  background: inherit;
+  grid-area: scroller; // referenced in FixedMargin.
 `;
 
 const Cells = styled.div`
-  grid-area: cells;
-  overflow: auto;
+  position: relative;
   will-change: transform;
-  box-sizing: border-box;
-`;
-
-const StuckRows = styled.div`
-  grid-area: stuckRows;
-  overflow-x: auto;
-  overflow-y: hidden;
-  will-change: transform;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-
-  &:empty {
-    display: none;
-  }
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`;
-
-const StuckCols = styled.div`
-  grid-area: stuckCols;
-  overflow-x: hidden;
-  overflow-y: auto;
-  will-change: transform;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-
-  &:empty {
-    display: none;
-  }
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 `;
 
 const StuckCells = styled.div`
-  grid-area: stuckCells;
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: inherit;
   will-change: transform;
-  position: relative;
-
-  &:empty {
-    display: none;
-  }
 `;
 
-const FixedTop = styled.div`
-  grid-area: fixedTop;
-`;
-
-const FixedLeft = styled.div`
-  grid-area: fixedLeft;
-`;
-
-const FixedRight = styled.div`
-  grid-area: fixedRight;
-`;
-
-const FixedBottom = styled.div`
-  grid-area: fixedBottom;
+const CellRoot = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
 `;
 
 const CellElement: FC<{
@@ -932,26 +835,30 @@ const CellElement: FC<{
   left: number;
   width: number;
   height: number;
+  naturalHeightRow?: number;
+  naturalWidthCol?: number;
   draggable: boolean;
   children: ReactNode;
-}> = ({ className, row, col, top, left, width, height, draggable, children }) => (
-  <div
-    className={[`r${row}`, `c${col}`, className].filter(Boolean).join(' ')}
-    draggable={draggable || undefined}
-    data-natural-height-row={height === -1 ? row : undefined}
-    data-natural-width-col={width === -1 ? col : undefined}
-    style={{
-      position: 'absolute',
-      boxSizing: 'border-box',
-      top: px(top),
-      left: px(left),
-      width: px(width),
-      height: px(height),
-    }}
-  >
-    {children}
-  </div>
+}> = memo(
+  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => (
+    <CellRoot
+      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
+      draggable={draggable || undefined}
+      data-natural-height-row={naturalHeightRow}
+      data-natural-width-col={naturalWidthCol}
+      style={{
+        transform: `translate(${px(left)}, ${px(top)})`,
+        width: px(width),
+        height: px(height),
+      }}
+    >
+      {children}
+    </CellRoot>
+  ),
 );
+
+const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
+  rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
@@ -974,8 +881,8 @@ const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number, size
     if (minSize < maxSize) {
       const remainder = maxSize - staticSize;
       const remainderPerFlex = remainder / flexSizes.reduce((t, s) => t + s.flex, 0);
-      return sizes.map((s, i) =>
-        sizeOverrides[i] || s === 'natural' ? -1 : typeof s === 'number' ? s : s.flex * remainderPerFlex,
+      return sizes.map(
+        (s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.flex * remainderPerFlex),
       );
     } else {
       return sizes.map((s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.min));
@@ -983,41 +890,7 @@ const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number, size
   }
 };
 
-const calculateOffsets = (itemSizes: number[], sizeOverrides: SizeOverrides) => {
-  const offsets = itemSizes.length === 0 ? [] : [0];
-  for (let i = 0; i < itemSizes.length - 1; i++) {
-    offsets.push(offsets[i] + (sizeOverrides[i] || itemSizes[i]));
-  }
-  return offsets;
-};
-
-const sameNumbers = (nums1: number[], nums2: number[]) => {
-  if (nums1.length === nums2.length) {
-    for (let i = 0; i < nums1.length; i += 1) {
-      if (nums1[i] !== nums2[i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-  return false;
-};
-
 const sameCell = (c1?: Cell, c2?: Cell) => c1 && c2 && c1.col === c2.col && c1.row === c2.row;
-
-const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
-  rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));
-
-const enforceWindowRange = (
-  renderWindow: { fromRow: number; toRow: number; fromCol: number; toCol: number },
-  numRows: number,
-  numCols: number,
-) => ({
-  fromRow: Math.min(numRows, Math.max(0, renderWindow.fromRow)),
-  toRow: Math.min(numRows, Math.max(0, renderWindow.toRow)),
-  fromCol: Math.min(numCols, Math.max(0, renderWindow.fromCol)),
-  toCol: Math.min(numCols, Math.max(0, renderWindow.toCol)),
-});
 
 const cellFromEvent = (event: Event, rows: unknown[][], cellsClassName: string): Cell | undefined => {
   let cellElmnt = event.target as HTMLElement | null;
@@ -1045,4 +918,86 @@ const cellFromEvent = (event: Event, rows: unknown[][], cellsClassName: string):
     );
     return row === -1 || col === -1 ? undefined : { row, col, data: rows[row][col] };
   }
+};
+
+const mayUsePassive = (() => {
+  try {
+    let supportsPassive = false;
+    const opts = Object.defineProperty({}, 'passive', {
+      get(): boolean {
+        supportsPassive = true;
+        return true;
+      },
+    });
+    const fn = () => {
+      return;
+    };
+    window.addEventListener('testPassive', fn, opts);
+    window.removeEventListener('testPassive', fn, opts);
+    return supportsPassive;
+  } catch (err) {
+    return false;
+  }
+})();
+
+const printStats = (renderDurations: number[]) => {
+  console.log('================ PERF STATS ================');
+  ['scroll', 'translate', 'render'].forEach(name => console.log('INTERVAL:', name, getStats(name)));
+
+  if (renderDurations.length > 0) {
+    renderDurations.sort((a, b) => a - b);
+    const min = renderDurations[0];
+    const max = renderDurations[renderDurations.length - 1];
+    const avg = renderDurations.reduce((s, n) => s + n, 0) / renderDurations.length;
+    console.log('PROFILER:', 'render', {
+      avg: Number(avg.toFixed(1)),
+      min: Number(min.toFixed(1)),
+      max: Number(max.toFixed(1)),
+      num: renderDurations.length,
+    });
+  }
+};
+
+const getStats = (name: string) => {
+  const entries = [...performance.getEntriesByName(name)];
+  const numEntries = entries.length;
+  let intervals: number[] = [];
+  for (let i = 1; i < numEntries; i++) {
+    const interval = entries[i].startTime - entries[i - 1].startTime;
+    intervals.push(interval);
+  }
+
+  performance.clearMarks(name);
+
+  if (intervals.length < 10) {
+    return undefined;
+  }
+
+  intervals.sort((a, b) => a - b);
+  intervals = intervals.slice(0, Math.round(intervals.length / 2));
+
+  const minInterval = intervals[0];
+  const maxInterval = intervals[intervals.length - 1];
+  const avg = intervals.reduce((s, n) => s + n, 0) / intervals.length;
+
+  return {
+    avg: Number(avg.toFixed(1)),
+    min: Number(minInterval.toFixed(1)),
+    max: Number(maxInterval.toFixed(1)),
+    num: numEntries,
+  };
+};
+
+const getRenderRange = (cellsRect: WindowCellsRect, totalRows: number, totalCols: number) => {
+  const { row, col, numRows, numCols } = cellsRect;
+  let [fromRow, toRow, fromCol, toCol] = [row, row + numRows, col, col + numCols];
+  if (toRow > totalRows) {
+    toRow = totalRows;
+    fromRow = Math.max(fromRow, toRow - numRows);
+  }
+  if (toCol > totalCols) {
+    toCol = totalCols;
+    fromCol = Math.max(fromCol, toCol - numCols);
+  }
+  return { fromRow, toRow, fromCol, toCol };
 };

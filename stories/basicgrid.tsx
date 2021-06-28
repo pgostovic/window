@@ -44,7 +44,12 @@ const theStyle = `
 export const BasicGrid: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller style={{ height: '500px', backgroundColor: '#ddd' }} rows={rows} cellClassName={() => 'theCell'} />
+    <Scroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={() => 'theCell'}
+      logPerfStats
+    />
   </>
 );
 

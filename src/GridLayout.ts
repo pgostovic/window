@@ -1,16 +1,13 @@
-const DEFAULT_MIN_CELLS_RECT_UPDATE_INTERVAL = 50;
 const DEFAULT_EXCESS_RENDER_X = 3;
 const DEFAULT_EXCESS_RENDER_Y = 3;
 
-interface Updates {
-  translate: { x: number; y: number };
-  cellsRect: WindowCellsRect;
-  stuckRows: StuckRows;
-  stuckCols: StuckCols;
-}
-type UpdateHandler = (updates: Partial<Updates> & { translate: { x: number; y: number } }) => void;
-export type StuckRows = { [row: number]: { y: number; height: number } };
-export type StuckCols = { [col: number]: { x: number; width: number } };
+type UpdateHandler = (
+  translate: { x: number; y: number },
+  update: { cells: boolean; stuckRows: boolean; stuckCols: boolean },
+  force: boolean,
+) => void;
+type StuckCols = { [col: number]: { x: number; width: number } };
+type StuckRows = { [row: number]: { y: number; height: number } };
 export type WindowCellsRect = { row: number; col: number; numRows: number; numCols: number };
 type WindowPxRect = { x: number; y: number; width: number; height: number };
 
@@ -26,9 +23,7 @@ export default class GridLayout {
   private stuckCols: StuckCols;
   private excessRenderX = DEFAULT_EXCESS_RENDER_X;
   private excessRenderY = DEFAULT_EXCESS_RENDER_Y;
-  private minCellsRectUpdateInterval = DEFAULT_MIN_CELLS_RECT_UPDATE_INTERVAL;
-  private lastCellsRectUpdateTime = 0;
-  private updates?: Updates;
+  public allowDiagnonal = false;
   public updateHandler: UpdateHandler = () => undefined;
 
   constructor() {
@@ -86,6 +81,18 @@ export default class GridLayout {
     this.stickyCols = [...stickyCols].sort((a, b) => a - b);
   }
 
+  getWindowCellsRect() {
+    return this.windowCellsRect;
+  }
+
+  getStuckRows() {
+    return this.stuckRows;
+  }
+
+  getStuckCols() {
+    return this.stuckCols;
+  }
+
   getRowPositions() {
     return this.rowPositions;
   }
@@ -95,10 +102,11 @@ export default class GridLayout {
   }
 
   setWindowSize(width: number, height: number) {
-    this.windowPxRect.width = width;
-    this.windowPxRect.height = height;
-    this.computeUpdates();
-    this.commitUpdates(true);
+    if (width !== this.windowPxRect.width || height !== this.windowPxRect.height) {
+      this.windowPxRect.width = width;
+      this.windowPxRect.height = height;
+      this.update(true);
+    }
   }
 
   getWindowRect() {
@@ -139,10 +147,18 @@ export default class GridLayout {
 
   moveWindowBy(dx: number, dy: number) {
     const { width, height } = this.gridPxSize;
-    this.windowPxRect.x = Math.min(Math.max(0, this.windowPxRect.x + dx), width - this.windowPxRect.width);
-    this.windowPxRect.y = Math.min(Math.max(0, this.windowPxRect.y + dy), height - this.windowPxRect.height);
-    this.computeUpdates();
-    this.commitUpdates();
+    const xgty = Math.abs(dx) > Math.abs(dy);
+    if (this.allowDiagnonal || xgty) {
+      this.windowPxRect.x = Math.min(Math.max(0, this.windowPxRect.x + dx), width - this.windowPxRect.width);
+    }
+    if (this.allowDiagnonal || !xgty) {
+      this.windowPxRect.y = Math.min(Math.max(0, this.windowPxRect.y + dy), height - this.windowPxRect.height);
+    }
+    this.update();
+  }
+
+  refresh() {
+    this.update(true);
   }
 
   /**
@@ -151,14 +167,15 @@ export default class GridLayout {
    * - stuckRows: which of the sticky rows are stuck
    * - stuckCols: which of the sticky cols are stuck
    * - translate: the translation that should be applied
-   * These computed updates are not applied to the state, rather they are only staged.
    */
-  private computeUpdates() {
+  private update(force = false) {
+    this.minimizeEmptySpace();
+
     // Find the row that straddles the top boundary of the window rect.
-    let row = this.windowCellsRect.row;
+    let row = Math.min(this.windowCellsRect.row, this.rowPositions.length - 1);
     let numRows = 0;
     let rowPos = this.rowPositions[row];
-    const dirY = rowPos.y > this.windowPxRect.y ? -1 : 1;
+    const dirY = rowPos && rowPos.y > this.windowPxRect.y ? -1 : 1;
     while (
       rowPos &&
       (rowPos.y > this.windowPxRect.y ||
@@ -183,10 +200,10 @@ export default class GridLayout {
     rowPos = this.rowPositions[row + numRows];
 
     // Find the col that straddles the left boundary of the window rect.
-    let col = this.windowCellsRect.col;
+    let col = Math.min(this.windowCellsRect.col, this.colPositions.length - 1);
     let numCols = 0;
     let colPos = this.colPositions[col];
-    const dirX = colPos.x > this.windowPxRect.x ? -1 : 1;
+    const dirX = colPos && colPos.x > this.windowPxRect.x ? -1 : 1;
     while (
       colPos &&
       (colPos.x > this.windowPxRect.x ||
@@ -210,65 +227,64 @@ export default class GridLayout {
     numCols += Math.min(this.excessRenderX, colsLeft);
     colPos = this.colPositions[col + numCols];
 
-    this.updates = {
-      translate: { x: -this.windowPxRect.x, y: -this.windowPxRect.y },
-      cellsRect: { row, col, numRows, numCols },
-      stuckRows: this.getStuckRows(),
-      stuckCols: this.getStuckCols(),
-    };
+    const translate = { x: -this.windowPxRect.x, y: -this.windowPxRect.y };
+    const stuckRows = this.computeStuckRows();
+    const stuckCols = this.computeStuckCols();
+    const cellsRect = { row, col, numRows, numCols };
+
+    const stuckRowsChanged = Object.keys(stuckRows).join() !== Object.keys(this.stuckRows).join();
+    const stuckColsChanged = Object.keys(stuckCols).join() !== Object.keys(this.stuckCols).join();
+
+    const shouldUpdateCellsRect =
+      Math.abs(cellsRect.row - this.windowCellsRect.row) >= this.excessRenderY ||
+      Math.abs(cellsRect.col - this.windowCellsRect.col) >= this.excessRenderX ||
+      Math.abs(cellsRect.numRows - this.windowCellsRect.numRows) >= this.excessRenderY ||
+      Math.abs(cellsRect.numCols - this.windowCellsRect.numCols) >= this.excessRenderX;
+
+    if (stuckRowsChanged) {
+      this.stuckRows = stuckRows;
+    }
+
+    if (stuckColsChanged) {
+      this.stuckCols = stuckCols;
+    }
+
+    if (shouldUpdateCellsRect) {
+      this.windowCellsRect = cellsRect;
+    }
+
+    this.updateHandler(
+      translate,
+      {
+        cells: shouldUpdateCellsRect,
+        stuckRows: stuckRowsChanged,
+        stuckCols: stuckColsChanged,
+      },
+      force,
+    );
   }
 
   /**
-   * This menthod determines which of the staged updates should actually be applied a the
-   * current time, and then passes these updates to the `updateHandler`. The applied updates
-   * are finally committed to the state.
-   *
-   * @param forceImmediate whether to bypass any throttling.
+   * Adjust the window px origin to minimize the amount or empty space that may be the result
+   * of a decrease in grid (i.e. data) size.
    */
-  private commitUpdates(forceImmediate = false) {
-    if (this.updates) {
-      const now = performance.now();
+  private minimizeEmptySpace() {
+    const { height, width } = this.gridPxSize;
 
-      const stuckRowsChanged = Object.keys(this.updates.stuckRows).join() !== Object.keys(this.stuckRows).join();
-      const stuckColsChanged = Object.keys(this.updates.stuckCols).join() !== Object.keys(this.stuckCols).join();
-      const cellsRectChanged =
-        Math.abs(this.updates.cellsRect.row - this.windowCellsRect.row) >= this.excessRenderY ||
-        Math.abs(this.updates.cellsRect.col - this.windowCellsRect.col) >= this.excessRenderX ||
-        Math.abs(this.updates.cellsRect.numRows - this.windowCellsRect.numRows) >= this.excessRenderY ||
-        Math.abs(this.updates.cellsRect.numCols - this.windowCellsRect.numCols) >= this.excessRenderX;
-
-      // Only allow `cellsRect` to be updated if enough time has ellapsed since the last update, or if `forceImmediate`.
-      const mayUpdateCellsRect = forceImmediate || now - this.lastCellsRectUpdateTime > this.minCellsRectUpdateInterval;
-
-      const updates = {
-        ...this.updates,
-        cellsRect: cellsRectChanged && mayUpdateCellsRect ? this.updates.cellsRect : undefined,
-        stuckRows: stuckRowsChanged ? this.updates.stuckRows : undefined,
-        stuckCols: stuckColsChanged ? this.updates.stuckCols : undefined,
-      };
-
-      this.updateHandler(updates);
-
-      if (updates.cellsRect) {
-        this.windowCellsRect = updates.cellsRect;
-        this.lastCellsRectUpdateTime = now;
-      }
-
-      if (updates.stuckRows) {
-        this.stuckRows = updates.stuckRows;
-      }
-
-      if (updates.stuckCols) {
-        this.stuckCols = updates.stuckCols;
-      }
-
-      this.updates = undefined;
+    if (height < this.windowPxRect.height) {
+      this.windowPxRect.y = 0;
     } else {
-      console.log('NO UPDATES');
+      this.windowPxRect.y = Math.min(Math.max(0, this.windowPxRect.y), height - this.windowPxRect.height);
+    }
+
+    if (width < this.windowPxRect.width) {
+      this.windowPxRect.x = 0;
+    } else {
+      this.windowPxRect.x = Math.min(Math.max(0, this.windowPxRect.x), width - this.windowPxRect.width);
     }
   }
 
-  private getStuckRows() {
+  private computeStuckRows() {
     const stuckRows: StuckRows = {};
     let prev = { y: 0, height: 0 };
     for (let i = 0; i < this.stickyRows.length; i += 1) {
@@ -286,7 +302,7 @@ export default class GridLayout {
     return stuckRows;
   }
 
-  private getStuckCols() {
+  private computeStuckCols() {
     const stuckCols: StuckCols = {};
     let prev = { x: 0, width: 0 };
     for (let i = 0; i < this.stickyCols.length; i += 1) {

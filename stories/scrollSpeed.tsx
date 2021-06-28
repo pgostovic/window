@@ -9,7 +9,6 @@ for (let i = 0; i < 1000; i++) {
 
 export const ScrollSpeed: FC = () => {
   const [speed, setSpeed] = useState<number>(1);
-  const [freezeScroll, setFreezeScroll] = useState(false);
   return (
     <>
       Scroll Speed:
@@ -19,18 +18,7 @@ export const ScrollSpeed: FC = () => {
           <span style={{ marginLeft: '5px' }}>{s}</span>
         </span>
       ))}
-      <input
-        type="checkbox"
-        style={{ marginLeft: '50px', marginRight: '10px' }}
-        onChange={event => setFreezeScroll(event.target.checked)}
-      />
-      Freeze Scrolling
-      <Scroller
-        style={{ height: '500px', width: '200px', marginTop: '10px' }}
-        rows={numbers}
-        scrollSpeed={speed}
-        freezeScroll={freezeScroll}
-      >
+      <Scroller style={{ height: '500px', width: '200px', marginTop: '10px' }} rows={numbers} scrollSpeed={speed}>
         {(num: number) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>{num}</div>
         )}
