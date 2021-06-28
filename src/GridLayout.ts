@@ -118,7 +118,7 @@ export default class GridLayout {
   }
 
   moveToBottom() {
-    this.moveWindow(this.windowPxRect.x, this.gridPxSize.height - this.windowPxRect.height);
+    this.moveWindow(this.windowPxRect.x, Math.max(0, this.gridPxSize.height - this.windowPxRect.height));
   }
 
   moveToLeft() {
@@ -126,7 +126,7 @@ export default class GridLayout {
   }
 
   moveToRight() {
-    this.moveWindow(this.gridPxSize.width - this.windowPxRect.width, this.windowPxRect.y);
+    this.moveWindow(Math.max(0, this.gridPxSize.width - this.windowPxRect.width), this.windowPxRect.y);
   }
 
   pageUp() {
@@ -148,13 +148,20 @@ export default class GridLayout {
   moveWindowBy(dx: number, dy: number) {
     const { width, height } = this.gridPxSize;
     const xgty = Math.abs(dx) > Math.abs(dy);
+    let newX = this.windowPxRect.x;
     if (this.allowDiagnonal || xgty) {
-      this.windowPxRect.x = Math.min(Math.max(0, this.windowPxRect.x + dx), width - this.windowPxRect.width);
+      newX = Math.min(Math.max(0, this.windowPxRect.x + dx), width - this.windowPxRect.width);
     }
+    let newY = this.windowPxRect.y;
     if (this.allowDiagnonal || !xgty) {
-      this.windowPxRect.y = Math.min(Math.max(0, this.windowPxRect.y + dy), height - this.windowPxRect.height);
+      newY = Math.min(Math.max(0, this.windowPxRect.y + dy), height - this.windowPxRect.height);
     }
-    this.update();
+
+    if (newX !== this.windowPxRect.x || newY !== this.windowPxRect.y) {
+      this.windowPxRect.x = newX;
+      this.windowPxRect.y = newY;
+      this.update();
+    }
   }
 
   refresh() {

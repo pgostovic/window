@@ -112,6 +112,7 @@ interface Props {
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   scrollEventSource?: HTMLElement;
+  onScroll?(position: { left: number; top: number; maxLeft: number; maxTop: number }): void;
   cellClassName?(cell: Cell): string;
   logPerfStats?: boolean;
   children?(data: unknown, cell: Cell): ReactNode;
@@ -137,6 +138,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       allowDiagnonal = false,
       scrollSpeed = 1,
       scrollEventSource,
+      onScroll,
       cellClassName,
       logPerfStats = false,
       children: renderCell = data => data as ReactNode,
@@ -223,6 +225,14 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         schedulerRef.current.throttle('render', force ? 0 : 50, () => {
           render(r => !r);
         });
+      }
+
+      if (onScroll) {
+        const { x: left, y: top, width, height } = gridLayoutRef.current.getWindowRect();
+        const gridSize = gridLayoutRef.current.getGridSize();
+        const maxLeft = Math.max(0, gridSize.width - width);
+        const maxTop = Math.max(0, gridSize.height - height);
+        return onScroll({ left, top, maxLeft, maxTop });
       }
 
       if (logPerfStats) {
