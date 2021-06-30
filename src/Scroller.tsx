@@ -1,16 +1,18 @@
 import React, {
+  cloneElement,
   createRef,
   CSSProperties,
   FC,
   forwardRef,
+  isValidElement,
   memo,
-  MutableRefObject,
   Profiler,
   ProfilerProps,
   ReactElement,
   ReactNode,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -22,6 +24,7 @@ import styled from 'styled-components';
 import FixedMargin, { FixedMarginProps } from './FixedMargin';
 import GridLayout, { WindowCellsRect } from './GridLayout';
 import Scheduler from './Scheduler';
+import ScrollBar, { ScrollBarRef } from './ScrollBar';
 
 const DEFAULT_ROW_HEIGHT = 40;
 const DEFAULT_COL_WIDTH = () => ({ flex: 1, min: 80 });
@@ -159,6 +162,8 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const stuckRowCellsElmntRef = createRef<HTMLDivElement>();
     const stuckColCellsElmntRef = createRef<HTMLDivElement>();
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
+    const vScrollBarRef = useRef<ScrollBarRef>(null);
+    const hScrollBarRef = useRef<ScrollBarRef>(null);
 
     // State
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
@@ -227,12 +232,21 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         });
       }
 
+      const { x: left, y: top, width, height } = gridLayoutRef.current.getWindowRect();
+      const gridSize = gridLayoutRef.current.getGridSize();
+      const maxLeft = Math.max(0, gridSize.width - width);
+      const maxTop = Math.max(0, gridSize.height - height);
+
       if (onScroll) {
-        const { x: left, y: top, width, height } = gridLayoutRef.current.getWindowRect();
-        const gridSize = gridLayoutRef.current.getGridSize();
-        const maxLeft = Math.max(0, gridSize.width - width);
-        const maxTop = Math.max(0, gridSize.height - height);
         return onScroll({ left, top, maxLeft, maxTop });
+      }
+
+      if (vScrollBarRef.current) {
+        vScrollBarRef.current.setPosition(top / maxTop);
+      }
+
+      if (hScrollBarRef.current) {
+        hScrollBarRef.current.setPosition(left / maxLeft);
       }
 
       if (logPerfStats) {
@@ -287,9 +301,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [rows, colPositions, rowPositions],
     );
 
-    if (ref) {
-      (ref as MutableRefObject<ScrollerRef>).current = scrollerApi;
-    }
+    useImperativeHandle(ref, () => scrollerApi);
 
     /**
      * Force a layout refresh when rows change.
@@ -754,6 +766,18 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       renderDurationsRef.current.push(actualDuration);
     }, []);
 
+    const onVScroll = useCallback((position: number) => {
+      const { x, height } = gridLayoutRef.current.getWindowRect();
+      const maxY = Math.max(0, gridLayoutRef.current.getGridSize().height - height);
+      gridLayoutRef.current.moveWindow(x, position * maxY);
+    }, []);
+
+    const onHScroll = useCallback((position: number) => {
+      const { y, width } = gridLayoutRef.current.getWindowRect();
+      const maxX = Math.max(0, gridLayoutRef.current.getGridSize().width - width);
+      gridLayoutRef.current.moveWindow(position * maxX, y);
+    }, []);
+
     return (
       <Prof enabled={logPerfStats} onRender={onRender}>
         <FixedMargin style={style} className={className} {...fixedMargin}>
@@ -768,6 +792,20 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             >
               {cellElmnts}
             </Cells>
+            <VScrollBar
+              ref={vScrollBarRef}
+              orientation="vertical"
+              top={px(stuckRowsHeight)}
+              barSize={gridLayoutRef.current.getWindowRect().height / gridSize.height}
+              onScroll={onVScroll}
+            />
+            <HScrollBar
+              ref={hScrollBarRef}
+              orientation="horizontal"
+              left={px(stuckColsWidth)}
+              barSize={gridLayoutRef.current.getWindowRect().width / gridSize.width}
+              onScroll={onHScroll}
+            />
             {stuckRowCellElmnts.length > 0 && (
               <StuckCells
                 ref={stuckRowCellsElmntRef}
@@ -820,6 +858,11 @@ const Root = styled.div`
 const Cells = styled.div`
   position: relative;
   will-change: transform;
+
+  & > .cell {
+    position: absolute;
+    box-sizing: border-box;
+  }
 `;
 
 const StuckCells = styled.div`
@@ -828,13 +871,23 @@ const StuckCells = styled.div`
   left: 0;
   background: inherit;
   will-change: transform;
+
+  & > .cell {
+    position: absolute;
+    box-sizing: border-box;
+  }
 `;
 
-const CellRoot = styled.div`
+const VScrollBar = styled(ScrollBar)`
   position: absolute;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
+  right: 0;
+  bottom: 0;
+`;
+
+const HScrollBar = styled(ScrollBar)`
+  position: absolute;
+  right: 0;
+  bottom: 0;
 `;
 
 const CellElement: FC<{
@@ -850,21 +903,18 @@ const CellElement: FC<{
   draggable: boolean;
   children: ReactNode;
 }> = memo(
-  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => (
-    <CellRoot
-      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
-      draggable={draggable || undefined}
-      data-natural-height-row={naturalHeightRow}
-      data-natural-width-col={naturalWidthCol}
-      style={{
-        transform: `translate(${px(left)}, ${px(top)})`,
-        width: px(width),
-        height: px(height),
-      }}
-    >
-      {children}
-    </CellRoot>
-  ),
+  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => {
+    const elmnt = isValidElement(children) ? children : <div>{children}</div>;
+    const { className: cn, style } = elmnt.props;
+    return cloneElement(elmnt, {
+      ...elmnt.props,
+      className: [cn, className, 'cell', `r${row}`, `c${col}`].filter(Boolean).join(' '),
+      draggable: draggable || undefined,
+      'data-natural-height-row': naturalHeightRow,
+      'data-natural-width-col': naturalWidthCol,
+      style: { ...style, left: px(left), top: px(top), width: px(width), height: px(height) },
+    });
+  },
 );
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
