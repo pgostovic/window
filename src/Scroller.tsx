@@ -1,10 +1,7 @@
 import React, {
-  cloneElement,
-  createRef,
   CSSProperties,
   FC,
   forwardRef,
-  isValidElement,
   memo,
   Profiler,
   ProfilerProps,
@@ -156,11 +153,11 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
     // Refs
     const schedulerRef = useRef(new Scheduler());
-    const gridLayoutRef = useRef(new GridLayout());
-    const rootElmntRef = createRef<HTMLDivElement>();
-    const cellsElmntRef = createRef<HTMLDivElement>();
-    const stuckRowCellsElmntRef = createRef<HTMLDivElement>();
-    const stuckColCellsElmntRef = createRef<HTMLDivElement>();
+    const gridLayoutRef = useRef<GridLayout>(new GridLayout());
+    const rootElmntRef = useRef<HTMLDivElement>(null);
+    const cellsElmntRef = useRef<HTMLDivElement>(null);
+    const stuckRowCellsElmntRef = useRef<HTMLDivElement>(null);
+    const stuckColCellsElmntRef = useRef<HTMLDivElement>(null);
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
     const vScrollBarRef = useRef<ScrollBarRef>(null);
     const hScrollBarRef = useRef<ScrollBarRef>(null);
@@ -858,11 +855,6 @@ const Root = styled.div`
 const Cells = styled.div`
   position: relative;
   will-change: transform;
-
-  & > .cell {
-    position: absolute;
-    box-sizing: border-box;
-  }
 `;
 
 const StuckCells = styled.div`
@@ -871,11 +863,6 @@ const StuckCells = styled.div`
   left: 0;
   background: inherit;
   will-change: transform;
-
-  & > .cell {
-    position: absolute;
-    box-sizing: border-box;
-  }
 `;
 
 const VScrollBar = styled(ScrollBar)`
@@ -890,6 +877,11 @@ const HScrollBar = styled(ScrollBar)`
   bottom: 0;
 `;
 
+const CellRoot = styled.div`
+  position: absolute;
+  box-sizing: border-box;
+`;
+
 const CellElement: FC<{
   className?: string;
   row: number;
@@ -901,20 +893,23 @@ const CellElement: FC<{
   naturalHeightRow?: number;
   naturalWidthCol?: number;
   draggable: boolean;
-  children: ReactNode;
 }> = memo(
-  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => {
-    const elmnt = isValidElement(children) ? children : <div>{children}</div>;
-    const { className: cn, style } = elmnt.props;
-    return cloneElement(elmnt, {
-      ...elmnt.props,
-      className: [cn, className, 'cell', `r${row}`, `c${col}`].filter(Boolean).join(' '),
-      draggable: draggable || undefined,
-      'data-natural-height-row': naturalHeightRow,
-      'data-natural-width-col': naturalWidthCol,
-      style: { ...style, left: px(left), top: px(top), width: px(width), height: px(height) },
-    });
-  },
+  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => (
+    <CellRoot
+      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
+      draggable={draggable || undefined}
+      data-natural-height-row={naturalHeightRow}
+      data-natural-width-col={naturalWidthCol}
+      style={{
+        left: px(left),
+        top: px(top),
+        width: px(width),
+        height: px(height),
+      }}
+    >
+      {children}
+    </CellRoot>
+  ),
 );
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
