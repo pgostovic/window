@@ -1,4 +1,4 @@
-import React, { createRef, forwardRef, memo, Ref, useEffect, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, memo, Ref, useEffect, useImperativeHandle, useRef } from 'react';
 import styled from 'styled-components';
 
 import Scheduler from './Scheduler';
@@ -62,8 +62,8 @@ const ScrollBar = memo(
   forwardRef<ScrollBarRef, Props>(
     ({ orientation, left, top, barSize, onScroll, className }, ref: Ref<ScrollBarRef>) => {
       const schedulerRef = useRef(new Scheduler());
-      const rootElmntRef = createRef<HTMLDivElement>();
-      const barContainerElmntRef = createRef<HTMLDivElement>();
+      const rootElmntRef = useRef<HTMLDivElement>(null);
+      const barContainerElmntRef = useRef<HTMLDivElement>(null);
       const rootSizeRef = useRef(0);
       const mouseDownLocRef = useRef<number>();
       const positionRef = useRef(0);
