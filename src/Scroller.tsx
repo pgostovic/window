@@ -161,11 +161,19 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
     const vScrollBarRef = useRef<ScrollBarRef>(null);
     const hScrollBarRef = useRef<ScrollBarRef>(null);
+    const isMounted = useRef(false);
 
     // State
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
     const [colWidthOverrides, setColWidthOverrides] = useState<SizeOverrides>({});
     const [, render] = useState(false);
+
+    useEffect(() => {
+      isMounted.current = true;
+      return () => {
+        isMounted.current = false;
+      };
+    }, []);
 
     /** Convert to 2d array if rows were supplied as a 1d array. */
     const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
@@ -225,7 +233,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       if (cells || stuckCols || stuckRows) {
         schedulerRef.current.throttle('render', force ? 0 : 50, () => {
-          render(r => !r);
+          if (isMounted.current) {
+            render(r => !r);
+          }
         });
       }
 
@@ -298,7 +308,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [rows, colPositions, rowPositions],
     );
 
-    useImperativeHandle(ref, () => scrollerApi);
+    useImperativeHandle(ref, () => scrollerApi, []);
 
     /**
      * Force a layout refresh when rows change.
