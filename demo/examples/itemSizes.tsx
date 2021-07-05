@@ -1,6 +1,6 @@
 import React, { FC, useEffect, useRef, useState } from 'react';
 
-import { Scroller, ScrollerRef } from '../../src';
+import { GridScroller, ScrollerRef } from '../../src';
 
 const NUM = 1000;
 
@@ -38,7 +38,7 @@ export const ItemSizes: FC = () => {
       <button onClick={() => setSlice(5)}>Slice 5</button>
       <button onClick={() => setSlice(25)}>Slice 25</button>
       <button onClick={() => setSlice(1000)}>Slice 1000</button>
-      <Scroller
+      <GridScroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
         rows={slicedNums}
@@ -51,7 +51,7 @@ export const ItemSizes: FC = () => {
             <span style={{ fontSize: 'small', color: '#999' }}>{slicedSizes[row]}px</span>
           </div>
         )}
-      </Scroller>
+      </GridScroller>
     </>
   );
 };

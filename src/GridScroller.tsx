@@ -120,7 +120,7 @@ interface Props {
   className?: string;
 }
 
-export const Scroller = forwardRef<ScrollerRef, Props>(
+export const GridScroller = forwardRef<ScrollerRef, Props>(
   (
     {
       rows: rowsRaw,

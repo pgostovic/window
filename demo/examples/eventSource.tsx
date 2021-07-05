@@ -1,6 +1,6 @@
 import React, { FC } from 'react';
 
-import { Scroller } from '../../src';
+import { GridScroller } from '../../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {
@@ -10,7 +10,7 @@ for (let i = 0; i < 1000; i++) {
 export const EventSource: FC = () => (
   <div>
     Scroll with the cursor anywhere in the frame.
-    <Scroller
+    <GridScroller
       scrollEventSource={document.documentElement}
       style={{
         height: '500px',
@@ -22,6 +22,6 @@ export const EventSource: FC = () => (
       {(num: number) => (
         <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>{num}</div>
       )}
-    </Scroller>
+    </GridScroller>
   </div>
 );

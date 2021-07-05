@@ -1,6 +1,6 @@
 import React, { FC, useState } from 'react';
 
-import { Scroller } from '../../src';
+import { GridScroller } from '../../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {
@@ -18,11 +18,11 @@ export const ScrollSpeed: FC = () => {
           <span style={{ marginLeft: '5px' }}>{s}</span>
         </span>
       ))}
-      <Scroller style={{ height: '500px', width: '200px', marginTop: '10px' }} rows={numbers} scrollSpeed={speed}>
+      <GridScroller style={{ height: '500px', width: '200px', marginTop: '10px' }} rows={numbers} scrollSpeed={speed}>
         {(num: number) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>{num}</div>
         )}
-      </Scroller>
+      </GridScroller>
     </>
   );
 };
