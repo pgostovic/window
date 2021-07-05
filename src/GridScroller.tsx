@@ -245,7 +245,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       const maxTop = Math.max(0, gridSize.height - height);
 
       if (onScroll) {
-        return onScroll({ left, top, maxLeft, maxTop });
+        onScroll({ left, top, maxLeft, maxTop });
       }
 
       if (vScrollBarRef.current) {
