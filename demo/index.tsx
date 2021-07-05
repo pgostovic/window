@@ -1,4 +1,4 @@
-import React, { FC } from 'react';
+import React, { FC, Fragment } from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter as Router, Link, Route, Switch } from 'react-router-dom';
 import styled from 'styled-components';
@@ -71,7 +71,7 @@ const Demo: FC = () => {
     <Router>
       <Nav>
         {Object.keys(examples).map(groupKey => (
-          <>
+          <Fragment key={groupKey}>
             <NavGroupTitle>{groupKey}</NavGroupTitle>
             <NavGroup>
               {Object.keys(examples[groupKey]).map(k => (
@@ -80,7 +80,7 @@ const Demo: FC = () => {
                 </NavLink>
               ))}
             </NavGroup>
-          </>
+          </Fragment>
         ))}
       </Nav>
       <Content>

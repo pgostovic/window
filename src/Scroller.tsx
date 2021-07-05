@@ -2,7 +2,6 @@ import React, {
   CSSProperties,
   FC,
   forwardRef,
-  memo,
   Profiler,
   ProfilerProps,
   ReactElement,
@@ -19,6 +18,7 @@ import ResizeObserver from 'resize-observer-polyfill';
 import styled from 'styled-components';
 
 import FixedMargin, { FixedMarginProps } from './FixedMargin';
+import GridCell from './GridCell';
 import GridLayout, { WindowCellsRect } from './GridLayout';
 import Scheduler from './Scheduler';
 import ScrollBar, { ScrollBarRef } from './ScrollBar';
@@ -646,7 +646,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
             const className = cellClassName ? cellClassName(cell) : undefined;
             cellElmnts.push(
-              <CellElement
+              <GridCell
                 key={key}
                 className={className}
                 row={r}
@@ -660,7 +660,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
-              </CellElement>,
+              </GridCell>,
             );
           }
         }
@@ -679,7 +679,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
           const className = cellClassName ? cellClassName(cell) : undefined;
           stuckRowCellElmnts.push(
-            <CellElement
+            <GridCell
               key={key}
               className={className}
               row={r}
@@ -693,7 +693,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               draggable={draggable}
             >
               {renderCell(cell.data, cell)}
-            </CellElement>,
+            </GridCell>,
           );
         }
       }
@@ -713,7 +713,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
             const className = cellClassName ? cellClassName(cell) : undefined;
             stuckColCellElmnts.push(
-              <CellElement
+              <GridCell
                 key={key}
                 className={className}
                 row={r}
@@ -727,7 +727,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
-              </CellElement>,
+              </GridCell>,
             );
           }
         }
@@ -746,7 +746,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const cell = { row: r, col: c, data: rows[r][c] };
         const className = cellClassName ? cellClassName(cell) : undefined;
         stuckCellElmnts.push(
-          <CellElement
+          <GridCell
             key={key}
             className={className}
             row={r}
@@ -760,7 +760,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             draggable={draggable}
           >
             {renderCell(cell.data, cell)}
-          </CellElement>,
+          </GridCell>,
         );
       });
     });
@@ -886,41 +886,6 @@ const HScrollBar = styled(ScrollBar)`
   right: 0;
   bottom: 0;
 `;
-
-const CellRoot = styled.div`
-  position: absolute;
-  box-sizing: border-box;
-`;
-
-const CellElement: FC<{
-  className?: string;
-  row: number;
-  col: number;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-  naturalHeightRow?: number;
-  naturalWidthCol?: number;
-  draggable: boolean;
-}> = memo(
-  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => (
-    <CellRoot
-      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
-      draggable={draggable || undefined}
-      data-natural-height-row={naturalHeightRow}
-      data-natural-width-col={naturalWidthCol}
-      style={{
-        left: px(left),
-        top: px(top),
-        width: px(width),
-        height: px(height),
-      }}
-    >
-      {children}
-    </CellRoot>
-  ),
-);
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
   rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));
