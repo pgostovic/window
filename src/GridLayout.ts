@@ -38,18 +38,18 @@ export default class GridLayout {
     this.stuckCols = {};
   }
 
-  getGridSize() {
+  getGridSize(): { width: number; height: number } {
     return this.gridPxSize;
   }
 
-  getScrollability() {
+  getScrollability(): { vertical: boolean; horizontal: boolean } {
     return {
       vertical: this.gridPxSize.height > this.windowPxRect.height,
       horizontal: this.gridPxSize.width > this.windowPxRect.width,
     };
   }
 
-  setRowHeights(rowHeights: number[]) {
+  setRowHeights(rowHeights: number[]): void {
     const rowPositions: { y: number; height: number }[] = [];
     let prev = { y: 0, height: 0 };
     for (let i = 0; i < rowHeights.length; i += 1) {
@@ -61,7 +61,7 @@ export default class GridLayout {
     this.gridPxSize.height = prev.y + prev.height;
   }
 
-  setColWidths(colWidths: number[]) {
+  setColWidths(colWidths: number[]): void {
     const colPositions: { x: number; width: number }[] = [];
     let prev = { x: 0, width: 0 };
     for (let i = 0; i < colWidths.length; i += 1) {
@@ -73,35 +73,35 @@ export default class GridLayout {
     this.gridPxSize.width = prev.x + prev.width;
   }
 
-  setStickyRows(stickyRows: number[]) {
+  setStickyRows(stickyRows: number[]): void {
     this.stickyRows = [...stickyRows].sort((a, b) => a - b);
   }
 
-  setStickyCols(stickyCols: number[]) {
+  setStickyCols(stickyCols: number[]): void {
     this.stickyCols = [...stickyCols].sort((a, b) => a - b);
   }
 
-  getWindowCellsRect() {
+  getWindowCellsRect(): WindowCellsRect {
     return this.windowCellsRect;
   }
 
-  getStuckRows() {
+  getStuckRows(): StuckRows {
     return this.stuckRows;
   }
 
-  getStuckCols() {
+  getStuckCols(): StuckCols {
     return this.stuckCols;
   }
 
-  getRowPositions() {
+  getRowPositions(): { y: number; height: number }[] {
     return this.rowPositions;
   }
 
-  getColPositions() {
+  getColPositions(): { x: number; width: number }[] {
     return this.colPositions;
   }
 
-  setWindowSize(width: number, height: number) {
+  setWindowSize(width: number, height: number): void {
     if (width !== this.windowPxRect.width || height !== this.windowPxRect.height) {
       this.windowPxRect.width = width;
       this.windowPxRect.height = height;
@@ -109,43 +109,43 @@ export default class GridLayout {
     }
   }
 
-  getWindowRect() {
+  getWindowRect(): WindowPxRect {
     return this.windowPxRect;
   }
 
-  moveToTop() {
+  moveToTop(): void {
     this.moveWindow(this.windowPxRect.x, 0);
   }
 
-  moveToBottom() {
+  moveToBottom(): void {
     this.moveWindow(this.windowPxRect.x, Math.max(0, this.gridPxSize.height - this.windowPxRect.height));
   }
 
-  moveToLeft() {
+  moveToLeft(): void {
     this.moveWindow(0, this.windowPxRect.y);
   }
 
-  moveToRight() {
+  moveToRight(): void {
     this.moveWindow(Math.max(0, this.gridPxSize.width - this.windowPxRect.width), this.windowPxRect.y);
   }
 
-  pageUp() {
+  pageUp(): void {
     const stuckRowsHeight = Object.values(this.stuckRows).reduce((h, sr) => h + sr.height, 0);
     this.moveWindowBy(0, -(this.windowPxRect.height - stuckRowsHeight));
   }
 
-  pageDown() {
+  pageDown(): void {
     const stuckRowsHeight = Object.values(this.stuckRows).reduce((h, sr) => h + sr.height, 0);
     this.moveWindowBy(0, this.windowPxRect.height - stuckRowsHeight);
   }
 
-  moveWindow(x: number, y: number) {
+  moveWindow(x: number, y: number): void {
     const dx = x - this.windowPxRect.x;
     const dy = y - this.windowPxRect.y;
     this.moveWindowBy(dx, dy);
   }
 
-  moveWindowBy(dx: number, dy: number) {
+  moveWindowBy(dx: number, dy: number): void {
     const { width, height } = this.gridPxSize;
     const xgty = Math.abs(dx) > Math.abs(dy);
     let newX = this.windowPxRect.x;
@@ -164,7 +164,7 @@ export default class GridLayout {
     }
   }
 
-  refresh() {
+  refresh(): void {
     this.update(true);
   }
 

@@ -10,6 +10,8 @@
     "dist": "rollup -c rollup.ts",
     "clean": "rimraf dist",
     "demo": "parcel demo/index.html",
+    "prelint": "tsc --noEmit --skipLibCheck",
+    "lint": "eslint --ext .ts,.tsx src demo",
     "release:patch": "npm run clean; npm version patch; npm run dist; cd dist; npm publish",
     "release:minor": "npm run clean; npm version minor; npm run dist; cd dist; npm publish"
   },
