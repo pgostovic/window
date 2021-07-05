@@ -1,7 +1,7 @@
 import faker from 'faker';
 import React, { FC, useRef, useState } from 'react';
 
-import { Scroller, ScrollerRef } from '../src';
+import { GridScroller, ScrollerRef } from '../../src';
 
 interface Person {
   firstName: string;
@@ -29,7 +29,7 @@ export const ScrollToIndex: FC = () => {
       <button onClick={() => windowRef.current.setScrollPosition({ left: 0, top: 1100 })}>
         Scroll to offset 1100px
       </button>
-      <Scroller
+      <GridScroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
         initPosition={{ row: 50, col: 0 }}
@@ -40,7 +40,7 @@ export const ScrollToIndex: FC = () => {
             {row} - {person.firstName} {person.lastName}
           </div>
         )}
-      </Scroller>
+      </GridScroller>
     </div>
   );
 };
@@ -54,7 +54,7 @@ export const ScrollToItem: FC = () => {
       <button disabled={!mark} onClick={() => windowRef.current.scrollTo(mark)}>
         Scroll to {mark ? mark.firstName : 'N/A'}
       </button>
-      <Scroller ref={windowRef} style={{ height: '500px' }} rows={people}>
+      <GridScroller ref={windowRef} style={{ height: '500px' }} rows={people}>
         {(person: Person) => (
           <div
             style={{
@@ -70,7 +70,7 @@ export const ScrollToItem: FC = () => {
             {person.firstName} {person.lastName} -- <a href={`mailto:${person.email}`}>{person.email}</a>
           </div>
         )}
-      </Scroller>
+      </GridScroller>
     </div>
   );
 };

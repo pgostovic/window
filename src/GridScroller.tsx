@@ -2,7 +2,6 @@ import React, {
   CSSProperties,
   FC,
   forwardRef,
-  memo,
   Profiler,
   ProfilerProps,
   ReactElement,
@@ -19,6 +18,7 @@ import ResizeObserver from 'resize-observer-polyfill';
 import styled from 'styled-components';
 
 import FixedMargin, { FixedMarginProps } from './FixedMargin';
+import GridCell from './GridCell';
 import GridLayout, { WindowCellsRect } from './GridLayout';
 import Scheduler from './Scheduler';
 import ScrollBar, { ScrollBarRef } from './ScrollBar';
@@ -120,7 +120,7 @@ interface Props {
   className?: string;
 }
 
-export const Scroller = forwardRef<ScrollerRef, Props>(
+export const GridScroller = forwardRef<ScrollerRef, Props>(
   (
     {
       rows: rowsRaw,
@@ -161,11 +161,19 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
     const vScrollBarRef = useRef<ScrollBarRef>(null);
     const hScrollBarRef = useRef<ScrollBarRef>(null);
+    const isMounted = useRef(false);
 
     // State
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
     const [colWidthOverrides, setColWidthOverrides] = useState<SizeOverrides>({});
     const [, render] = useState(false);
+
+    useEffect(() => {
+      isMounted.current = true;
+      return () => {
+        isMounted.current = false;
+      };
+    }, []);
 
     /** Convert to 2d array if rows were supplied as a 1d array. */
     const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
@@ -225,7 +233,9 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
 
       if (cells || stuckCols || stuckRows) {
         schedulerRef.current.throttle('render', force ? 0 : 50, () => {
-          render(r => !r);
+          if (isMounted.current) {
+            render(r => !r);
+          }
         });
       }
 
@@ -235,7 +245,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       const maxTop = Math.max(0, gridSize.height - height);
 
       if (onScroll) {
-        return onScroll({ left, top, maxLeft, maxTop });
+        onScroll({ left, top, maxLeft, maxTop });
       }
 
       if (vScrollBarRef.current) {
@@ -298,7 +308,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
       [rows, colPositions, rowPositions],
     );
 
-    useImperativeHandle(ref, () => scrollerApi);
+    useImperativeHandle(ref, () => scrollerApi, []);
 
     /**
      * Force a layout refresh when rows change.
@@ -636,7 +646,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
             const className = cellClassName ? cellClassName(cell) : undefined;
             cellElmnts.push(
-              <CellElement
+              <GridCell
                 key={key}
                 className={className}
                 row={r}
@@ -650,7 +660,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
-              </CellElement>,
+              </GridCell>,
             );
           }
         }
@@ -669,7 +679,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
           const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
           const className = cellClassName ? cellClassName(cell) : undefined;
           stuckRowCellElmnts.push(
-            <CellElement
+            <GridCell
               key={key}
               className={className}
               row={r}
@@ -683,7 +693,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
               draggable={draggable}
             >
               {renderCell(cell.data, cell)}
-            </CellElement>,
+            </GridCell>,
           );
         }
       }
@@ -703,7 +713,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
             const className = cellClassName ? cellClassName(cell) : undefined;
             stuckColCellElmnts.push(
-              <CellElement
+              <GridCell
                 key={key}
                 className={className}
                 row={r}
@@ -717,7 +727,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
-              </CellElement>,
+              </GridCell>,
             );
           }
         }
@@ -736,7 +746,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
         const cell = { row: r, col: c, data: rows[r][c] };
         const className = cellClassName ? cellClassName(cell) : undefined;
         stuckCellElmnts.push(
-          <CellElement
+          <GridCell
             key={key}
             className={className}
             row={r}
@@ -750,7 +760,7 @@ export const Scroller = forwardRef<ScrollerRef, Props>(
             draggable={draggable}
           >
             {renderCell(cell.data, cell)}
-          </CellElement>,
+          </GridCell>,
         );
       });
     });
@@ -876,41 +886,6 @@ const HScrollBar = styled(ScrollBar)`
   right: 0;
   bottom: 0;
 `;
-
-const CellRoot = styled.div`
-  position: absolute;
-  box-sizing: border-box;
-`;
-
-const CellElement: FC<{
-  className?: string;
-  row: number;
-  col: number;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-  naturalHeightRow?: number;
-  naturalWidthCol?: number;
-  draggable: boolean;
-}> = memo(
-  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => (
-    <CellRoot
-      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
-      draggable={draggable || undefined}
-      data-natural-height-row={naturalHeightRow}
-      data-natural-width-col={naturalWidthCol}
-      style={{
-        left: px(left),
-        top: px(top),
-        width: px(width),
-        height: px(height),
-      }}
-    >
-      {children}
-    </CellRoot>
-  ),
-);
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
   rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));

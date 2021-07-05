@@ -1,7 +1,7 @@
 import React, { FC } from 'react';
 import { FixedSizeList } from 'react-window';
 
-import { Scroller } from '../src';
+import { Scroller } from '../../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 1000; i++) {

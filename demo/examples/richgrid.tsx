@@ -2,7 +2,7 @@ import faker from 'faker';
 import React, { FC, memo } from 'react';
 import styled from 'styled-components';
 
-import { Scroller } from '../src';
+import { GridScroller } from '../../src';
 
 interface Person {
   id: number;
@@ -49,7 +49,7 @@ const Cell = styled.div`
 
 export const RichGrid: FC = () => (
   <>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={peopleArray}
       stickyRows={[0, 1, 5, 10]}
@@ -57,7 +57,7 @@ export const RichGrid: FC = () => (
       colWidth={c => (c === 0 ? { flex: 1, min: 250 } : 130)}
     >
       {(data, { col }) => <Cell>{col === 2 ? <Email email={data as string} /> : data}</Cell>}
-    </Scroller>
+    </GridScroller>
   </>
 );
 

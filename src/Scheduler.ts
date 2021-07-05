@@ -15,7 +15,7 @@ class Scheduler {
    * @param key used to group invocations.
    * @param fn the callback function.
    */
-  nextFrame(key: string, fn: () => void) {
+  nextFrame(key: string, fn: () => void): void {
     const pid = this.rafPids[key];
     if (pid) {
       cancelAnimationFrame(pid);
@@ -30,7 +30,7 @@ class Scheduler {
    * @param interval minimum time interval (ms) between callback function calls.
    * @param fn the callback function.
    */
-  throttle(key: string, interval: number, fn: () => void) {
+  throttle(key: string, interval: number, fn: () => void): void {
     const now = performance.now();
     const pid = this.throttlePids[key];
     if (pid) {
@@ -53,7 +53,7 @@ class Scheduler {
    * @param interval minimum pause interval (ms) before a callback function is called.
    * @param fn the callback function.
    */
-  debounce(key: string, interval: number, fn: () => void) {
+  debounce(key: string, interval: number, fn: () => void): void {
     const pid = this.debouncePids[key];
     if (pid) {
       clearTimeout(pid);

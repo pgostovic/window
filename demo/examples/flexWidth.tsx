@@ -1,6 +1,6 @@
 import React, { FC, useEffect, useState } from 'react';
 
-import { Scroller } from '../src';
+import { GridScroller } from '../../src';
 
 const numbers: number[] = [];
 for (let i = 0; i < 100; i++) {
@@ -31,14 +31,14 @@ export const FlexWidth: FC = () => {
     <>
       <style>{theStyle}</style>
       {rows.length === 0 && <div>LOADING...</div>}
-      <Scroller className="scroller" rows={rows} rowHeight={50}>
+      <GridScroller className="scroller" rows={rows} rowHeight={50}>
         {(num: number, { row }) => (
           <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
             <span style={{ flex: 1 }}>{num}</span>
             <span style={{ fontSize: 'small', color: '#999' }}>{sizes[row]}px</span>
           </div>
         )}
-      </Scroller>
+      </GridScroller>
     </>
   );
 };

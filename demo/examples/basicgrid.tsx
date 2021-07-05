@@ -1,6 +1,6 @@
 import React, { FC } from 'react';
 
-import { Scroller } from '../src';
+import { GridScroller } from '../../src';
 
 const rows: string[][] = [];
 
@@ -44,7 +44,7 @@ const theStyle = `
 export const BasicGrid: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={() => 'theCell'}
@@ -56,7 +56,7 @@ export const BasicGrid: FC = () => (
 export const StickyRows: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={() => 'theCell'}
@@ -68,7 +68,7 @@ export const StickyRows: FC = () => (
 export const StickyCols: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={() => 'theCell'}
@@ -80,7 +80,7 @@ export const StickyCols: FC = () => (
 export const StickyRowsAndCols: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={() => 'theCell'}
@@ -93,7 +93,7 @@ export const StickyRowsAndCols: FC = () => (
 export const CellSpan: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={({ row, col }) => (row === 5 && col === 5 ? 'theCell spanner' : 'theCell')}
@@ -141,7 +141,7 @@ export const CellSpan: FC = () => (
 export const GridWithEvents: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       cellClassName={() => 'theCell'}
@@ -154,7 +154,7 @@ export const GridWithEvents: FC = () => (
 export const GridWithFixedMarginContent: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       stickyRows={[5, 10]}
@@ -238,7 +238,7 @@ export const GridWithFixedMarginContent: FC = () => (
 export const GridWithArrowScroll: FC = () => (
   <>
     <style>{theStyle}</style>
-    <Scroller
+    <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
       arrowScrollAmount={50}
