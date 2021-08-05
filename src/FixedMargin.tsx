@@ -1,4 +1,4 @@
-import React, { CSSProperties, FC, ReactElement, ReactNode } from 'react';
+import React, { CSSProperties, FC, ReactNode } from 'react';
 import styled from 'styled-components';
 
 const Root = styled.div<{ topHeight: number; bottomHeight: number; leftWidth: number; rightWidth: number }>`
