@@ -2,6 +2,7 @@ import React, { CSSProperties, FC, ReactElement, ReactNode } from 'react';
 import styled from 'styled-components';
 
 const Root = styled.div<{ topHeight: number; bottomHeight: number; leftWidth: number; rightWidth: number }>`
+  position: relative;
   display: grid;
   grid-template-columns: ${({ leftWidth }) => px(leftWidth)} 1fr ${({ rightWidth }) => px(rightWidth)};
   grid-template-rows: ${({ topHeight }) => px(topHeight)} 1fr ${({ bottomHeight }) => px(bottomHeight)};
@@ -37,7 +38,6 @@ export interface FixedMarginProps {
 interface Props extends FixedMarginProps {
   className?: string;
   style?: CSSProperties;
-  children: ReactElement;
 }
 
 const FixedMargin: FC<Props> = ({ top, bottom, left, right, className, style, children }) => {

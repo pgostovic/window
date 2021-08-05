@@ -104,6 +104,7 @@ interface Props {
   stickyCols?: number[];
   cellSpans?: CellSpan[];
   fixedMargin?: FixedMarginProps;
+  overlay?: ReactNode;
   initPosition?: { row: number; col: number };
   initScrollPosition?: { left: number; top: number };
   arrowScrollAmount?: number | { x: number; y: number };
@@ -130,6 +131,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       stickyCols = [],
       cellSpans = [],
       fixedMargin,
+      overlay,
       initPosition,
       cellEventTypes = [],
       onCellEvent,
@@ -840,6 +842,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
               </StuckCells>
             )}
           </Root>
+          {overlay && <Overlay className="overlay">{overlay}</Overlay>}
         </FixedMargin>
       </Prof>
     );
@@ -885,6 +888,18 @@ const HScrollBar = styled(ScrollBar)`
   position: absolute;
   right: 0;
   bottom: 0;
+`;
+
+const Overlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
 `;
 
 const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>

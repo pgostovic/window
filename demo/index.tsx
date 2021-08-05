@@ -8,6 +8,7 @@ import * as basicgrid from './examples/basicgrid';
 import * as eventSource from './examples/eventSource';
 import * as flexWidth from './examples/flexWidth';
 import * as itemSizes from './examples/itemSizes';
+import * as overlay from './examples/overlay';
 import * as richgrid from './examples/richgrid';
 import * as scrollSpeed from './examples/scrollSpeed';
 import * as scrollTo from './examples/scrollTo';
@@ -23,6 +24,7 @@ const examples = {
   scrollSpeed,
   basicgrid,
   richgrid,
+  overlay,
 };
 
 const flatExamples = Object.values(examples).reduce((rendered, comps) => ({ ...rendered, ...comps }), {});
