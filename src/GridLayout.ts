@@ -164,8 +164,8 @@ export default class GridLayout {
     }
   }
 
-  refresh(): void {
-    this.update(true);
+  refresh(notify?: boolean): void {
+    this.update(true, notify);
   }
 
   /**
@@ -175,7 +175,7 @@ export default class GridLayout {
    * - stuckCols: which of the sticky cols are stuck
    * - translate: the translation that should be applied
    */
-  private update(force = false) {
+  private update(force = false, notify = true) {
     this.minimizeEmptySpace();
 
     // Find the row that straddles the top boundary of the window rect.
@@ -261,15 +261,17 @@ export default class GridLayout {
       this.windowCellsRect = cellsRect;
     }
 
-    this.updateHandler(
-      translate,
-      {
-        cells: shouldUpdateCellsRect,
-        stuckRows: stuckRowsChanged,
-        stuckCols: stuckColsChanged,
-      },
-      force,
-    );
+    if (notify) {
+      this.updateHandler(
+        translate,
+        {
+          cells: shouldUpdateCellsRect,
+          stuckRows: stuckRowsChanged,
+          stuckCols: stuckColsChanged,
+        },
+        force,
+      );
+    }
   }
 
   /**

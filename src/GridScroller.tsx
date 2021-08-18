@@ -164,6 +164,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     const vScrollBarRef = useRef<ScrollBarRef>(null);
     const hScrollBarRef = useRef<ScrollBarRef>(null);
     const isMounted = useRef(false);
+    const rowsRef = useRef<unknown[][]>();
 
     // State
     const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
@@ -179,6 +180,8 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
 
     /** Convert to 2d array if rows were supplied as a 1d array. */
     const rows = useMemo(() => to2d(rowsRaw), [rowsRaw]);
+    const rowsChanged = rowsRef.current !== rows;
+    rowsRef.current = rows;
 
     /** Unique id for this scroller. */
     const scrollerId = useMemo(() => scrollerIdIter.next().value as string, []);
@@ -265,6 +268,15 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
         });
       }
     };
+
+    /**
+     * If rows have changed then perform layout calculations immediately but don't notify.
+     * This ensures that the current render has the latest calculations instead of waiting
+     * for the next render.
+     */
+    if (rowsChanged) {
+      gridLayoutRef.current.refresh(false);
+    }
 
     /**
      * Get some GridLayout state for the current render.
