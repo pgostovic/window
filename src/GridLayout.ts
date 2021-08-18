@@ -239,10 +239,11 @@ export default class GridLayout {
     const stuckCols = this.computeStuckCols();
     const cellsRect = { row, col, numRows, numCols };
 
-    const stuckRowsChanged = Object.keys(stuckRows).join() !== Object.keys(this.stuckRows).join();
-    const stuckColsChanged = Object.keys(stuckCols).join() !== Object.keys(this.stuckCols).join();
+    const stuckRowsChanged = force || Object.keys(stuckRows).join() !== Object.keys(this.stuckRows).join();
+    const stuckColsChanged = force || Object.keys(stuckCols).join() !== Object.keys(this.stuckCols).join();
 
     const shouldUpdateCellsRect =
+      force ||
       Math.abs(cellsRect.row - this.windowCellsRect.row) >= this.excessRenderY ||
       Math.abs(cellsRect.col - this.windowCellsRect.col) >= this.excessRenderX ||
       Math.abs(cellsRect.numRows - this.windowCellsRect.numRows) >= this.excessRenderY ||
