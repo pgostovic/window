@@ -247,7 +247,12 @@ export default class GridLayout {
       Math.abs(cellsRect.row - this.windowCellsRect.row) >= this.excessRenderY ||
       Math.abs(cellsRect.col - this.windowCellsRect.col) >= this.excessRenderX ||
       Math.abs(cellsRect.numRows - this.windowCellsRect.numRows) >= this.excessRenderY ||
-      Math.abs(cellsRect.numCols - this.windowCellsRect.numCols) >= this.excessRenderX;
+      Math.abs(cellsRect.numCols - this.windowCellsRect.numCols) >= this.excessRenderX ||
+      /**
+       * If the cellsRect has moved to a boundary, the difference may be less than the required excess.
+       * So, should update when a boundary is reached.
+       */
+      this.movedToBoundary(cellsRect);
 
     if (stuckRowsChanged) {
       this.stuckRows = stuckRows;
@@ -272,6 +277,22 @@ export default class GridLayout {
         force,
       );
     }
+  }
+
+  /**
+   * Tests whether the supplied cellsRect would constitute a move to a boumndary.
+   * @param cellsRect the proposed cellsRect.
+   * @returns whether the supplied cellsRect would constitute a move to a boumndary.
+   */
+  private movedToBoundary(cellsRect: WindowCellsRect) {
+    return (
+      (cellsRect.row === 0 && this.windowCellsRect.row !== 0) ||
+      (cellsRect.col === 0 && this.windowCellsRect.col !== 0) ||
+      (cellsRect.row + cellsRect.numRows === this.rowPositions.length &&
+        this.windowCellsRect.row + this.windowCellsRect.numRows !== this.rowPositions.length) ||
+      (cellsRect.col + cellsRect.numCols === this.colPositions.length &&
+        this.windowCellsRect.col + this.windowCellsRect.numCols !== this.colPositions.length)
+    );
   }
 
   /**
