@@ -45,7 +45,6 @@
     "eslint-plugin-react": "^7.22.0",
     "eslint-plugin-simple-import-sort": "^5.0.3",
     "faker": "^4.1.0",
-    "fork-ts-checker-webpack-plugin": "^4.1.6",
     "parcel-bundler": "^1.12.5",
     "prettier": "^1.19.1",
     "react": "^17.0.2",
@@ -65,7 +64,8 @@
     "react": "^17.0.2"
   },
   "dependencies": {
+    "react-is": "^17.0.2",
     "resize-observer-polyfill": "^1.5.1",
-    "styled-components": "^5.3.0"
+    "styled-components": "^5.3.1"
   }
 }
