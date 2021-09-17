@@ -19,7 +19,7 @@ import styled from 'styled-components';
 
 import FixedMargin, { FixedMarginProps } from './FixedMargin';
 import GridCell from './GridCell';
-import GridLayout, { WindowCellsRect } from './GridLayout';
+import GridLayout, { WindowCellsRect, WindowPxRect } from './GridLayout';
 import Scheduler from './Scheduler';
 import ScrollBar, { ScrollBarRef } from './ScrollBar';
 
@@ -96,6 +96,11 @@ interface TouchInfo {
   pid?: NodeJS.Timeout;
 }
 
+interface MayScrollProps extends WindowPxRect {
+  deltaX: number;
+  deltaY: number;
+}
+
 interface Props {
   rows: unknown[][] | unknown[];
   rowHeight?: ItemSize;
@@ -114,6 +119,7 @@ interface Props {
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   scrollEventSource?: HTMLElement;
   onScroll?(position: { left: number; top: number; maxLeft: number; maxTop: number }): void;
+  mayScroll?: boolean | ((props: MayScrollProps) => boolean);
   cellClassName?(cell: Cell): string;
   logPerfStats?: boolean;
   children?(data: unknown, cell: Cell): ReactNode;
@@ -141,6 +147,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       scrollSpeed = 1,
       scrollEventSource,
       onScroll,
+      mayScroll = true,
       cellClassName,
       logPerfStats = false,
       children: renderCell = data => data as ReactNode,
@@ -369,6 +376,16 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       if (sourceElmnt && (isVerticallyScrollable || isHorizontallyScrollable)) {
         const onWheel = (event: WheelEvent) => {
           const { deltaX, deltaY } = event;
+
+          const isScrollingEnabled =
+            typeof mayScroll === 'boolean'
+              ? mayScroll
+              : mayScroll({ ...gridLayoutRef.current.getWindowRect(), deltaX, deltaY });
+
+          if (!isScrollingEnabled) {
+            return;
+          }
+
           if (logPerfStats) {
             performance.mark('scroll');
           }
@@ -432,7 +449,15 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
          * be called. This prevents the back/forward swipe navigation from happening.
          */
         const preventBack = (event: WheelEvent) => {
-          event.preventDefault();
+          const { deltaX, deltaY } = event;
+          const isScrollingEnabled =
+            typeof mayScroll === 'boolean'
+              ? mayScroll
+              : mayScroll({ ...gridLayoutRef.current.getWindowRect(), deltaX, deltaY });
+
+          if (isScrollingEnabled) {
+            event.preventDefault();
+          }
         };
 
         sourceElmnt.addEventListener('wheel', onWheel, mayUsePassive ? { passive: true } : false);
@@ -448,7 +473,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           sourceElmnt.removeEventListener('touchend', onTouchEnd);
         };
       }
-    }, [scrollEventSource, isVerticallyScrollable, isHorizontallyScrollable, scrollSpeed, logPerfStats]);
+    }, [scrollEventSource, isVerticallyScrollable, isHorizontallyScrollable, scrollSpeed, logPerfStats, mayScroll]);
 
     /**
      * Handle cell events

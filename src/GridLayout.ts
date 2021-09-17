@@ -9,7 +9,7 @@ type UpdateHandler = (
 type StuckCols = { [col: number]: { x: number; width: number } };
 type StuckRows = { [row: number]: { y: number; height: number } };
 export type WindowCellsRect = { row: number; col: number; numRows: number; numCols: number };
-type WindowPxRect = { x: number; y: number; width: number; height: number };
+export type WindowPxRect = { x: number; y: number; width: number; height: number };
 
 export default class GridLayout {
   private rowPositions: { y: number; height: number }[];

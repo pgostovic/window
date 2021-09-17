@@ -13,6 +13,7 @@ import * as richgrid from './examples/richgrid';
 import * as scrollSpeed from './examples/scrollSpeed';
 import * as scrollTo from './examples/scrollTo';
 import * as sizeToFit from './examples/sizeToFit';
+import * as sticky from './examples/sticky';
 
 const examples = {
   basic,
@@ -25,6 +26,7 @@ const examples = {
   basicgrid,
   richgrid,
   overlay,
+  sticky,
 };
 
 const flatExamples = Object.values(examples).reduce((rendered, comps) => ({ ...rendered, ...comps }), {});
