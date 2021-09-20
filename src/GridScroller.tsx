@@ -118,6 +118,7 @@ interface Props {
   cellEventTypes?: EventType[];
   onCellEvent?(type: EventType, cell: Cell, event: Event): void;
   scrollEventSource?: HTMLElement;
+  scrollbarContainer?: HTMLElement;
   onScroll?(position: { left: number; top: number; maxLeft: number; maxTop: number }): void;
   mayScroll?: boolean | ((props: MayScrollProps) => boolean);
   cellClassName?(cell: Cell): string;
@@ -146,6 +147,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       allowDiagnonal = false,
       scrollSpeed = 1,
       scrollEventSource,
+      scrollbarContainer,
       onScroll,
       mayScroll = true,
       cellClassName,
@@ -841,6 +843,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
             <VScrollBar
               ref={vScrollBarRef}
               orientation="vertical"
+              container={scrollbarContainer}
               top={px(stuckRowsHeight)}
               barSize={gridLayoutRef.current.getWindowRect().height / gridSize.height}
               onScroll={onVScroll}
@@ -848,6 +851,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
             <HScrollBar
               ref={hScrollBarRef}
               orientation="horizontal"
+              container={scrollbarContainer}
               left={px(stuckColsWidth)}
               barSize={gridLayoutRef.current.getWindowRect().width / gridSize.width}
               onScroll={onHScroll}

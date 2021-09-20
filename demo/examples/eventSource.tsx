@@ -12,6 +12,7 @@ export const EventSource: FC = () => (
     Scroll with the cursor anywhere in the frame.
     <GridScroller
       scrollEventSource={document.documentElement}
+      scrollbarContainer={document.documentElement}
       style={{
         height: '500px',
         width: '200px',

@@ -57,7 +57,7 @@ export const Sticky: FC = () => (
       mayScroll={({ y, deltaY }) => {
         const { scrollTop, clientHeight, scrollHeight } = document.documentElement;
         const bottom = scrollHeight - clientHeight - scrollTop;
-        return bottom === 0 && (y > 0 || deltaY > 0);
+        return (y > 0 && deltaY < 0) || (bottom === 0 && (y > 0 || deltaY > 0));
       }}
       scrollEventSource={document.documentElement}
       style={{ height: '95vh', backgroundColor: '#ddd' }}

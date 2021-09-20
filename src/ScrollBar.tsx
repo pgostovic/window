@@ -1,4 +1,5 @@
-import React, { forwardRef, memo, Ref, useEffect, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, memo, ReactElement, Ref, useEffect, useImperativeHandle, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 
 import Scheduler from './Scheduler';
@@ -50,6 +51,7 @@ interface Props {
   left?: string | 0;
   top?: string | 0;
   barSize: number;
+  container?: HTMLElement;
   onScroll(position: number): void;
   className?: string;
 }
@@ -60,7 +62,7 @@ export interface ScrollBarRef {
 
 const ScrollBar = memo(
   forwardRef<ScrollBarRef, Props>(
-    ({ orientation, left, top, barSize, onScroll, className }, ref: Ref<ScrollBarRef>) => {
+    ({ orientation, left, top, barSize, container, onScroll, className }, ref: Ref<ScrollBarRef>) => {
       const schedulerRef = useRef(new Scheduler());
       const rootElmntRef = useRef<HTMLDivElement>(null);
       const barContainerElmntRef = useRef<HTMLDivElement>(null);
@@ -110,7 +112,8 @@ const ScrollBar = memo(
           ? { height: `${100 * barSizeFraction}%` }
           : { width: `${100 * barSizeFraction}%`, height: '100%' };
 
-      return (
+      return render(
+        container,
         <Root
           ref={rootElmntRef}
           className={[className, orientation === 'vertical' ? 'vertical' : 'horizontal'].filter(Boolean).join(' ')}
@@ -149,10 +152,13 @@ const ScrollBar = memo(
               }}
             />
           </BarContainer>
-        </Root>
+        </Root>,
       );
     },
   ),
 );
+
+const render = (container: HTMLElement | undefined, element: ReactElement) =>
+  container ? createPortal(element, container) : element;
 
 export default ScrollBar;

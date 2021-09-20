@@ -1,7 +1,7 @@
 import React, { FC, Fragment } from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter as Router, Link, Route, Switch } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 
 import * as basic from './examples/basic';
 import * as basicgrid from './examples/basicgrid';
@@ -31,12 +31,24 @@ const examples = {
 
 const flatExamples = Object.values(examples).reduce((rendered, comps) => ({ ...rendered, ...comps }), {});
 
+const GlobalStyle = createGlobalStyle`
+  html {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  body {
+    height: 100%;
+    overflow: auto;
+  }
+`;
+
 const Nav = styled.div`
   position: fixed;
   top: 0;
   left: 0;
   width: 250px;
-  height: 100vh;
+  height: 90vh;
   background-color: #f0f0f0;
   font-family: sans-serif;
   font-size: 14px;
@@ -73,6 +85,7 @@ const Content = styled.div`
 const Demo: FC = () => {
   return (
     <Router>
+      <GlobalStyle />
       <Nav>
         {Object.keys(examples).map(groupKey => (
           <Fragment key={groupKey}>
