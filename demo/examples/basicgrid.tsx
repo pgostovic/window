@@ -122,6 +122,7 @@ export const SuppressHorizontalScroll: FC = () => (
       rows={rows}
       cellClassName={({ row }) => (row === 5 || row === 10 ? 'theCell spanner' : 'theCell')}
       vRows={[5, 10]}
+      cellSpans={[{ row: 10, col: 0, rows: 1, cols: 'window' }]}
       stickyRows={[5]}
     />
   </>
@@ -135,6 +136,7 @@ export const SuppressVerticalScroll: FC = () => (
       rows={rows}
       cellClassName={({ col }) => (col === 5 || col === 10 ? 'theCell spanner' : 'theCell')}
       hCols={[5, 10]}
+      cellSpans={[{ row: 0, col: 10, cols: 1, rows: 'window' }]}
       stickyCols={[5]}
     />
   </>

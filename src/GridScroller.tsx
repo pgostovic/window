@@ -73,8 +73,8 @@ type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
 interface CellSpan {
   row: number;
   col: number;
-  rows: number;
-  cols: number;
+  rows: number | 'window';
+  cols: number | 'window';
 }
 
 export interface Cell {
@@ -684,12 +684,20 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       if (cellSpan) {
         const { rows, cols } = cellSpan;
         let height = 0;
-        for (let r = cell.row; r < cell.row + rows; r += 1) {
-          height += rowPositions[r].height;
+        if (rows === 'window') {
+          height = gridLayoutRef.current.getWindowRect().height;
+        } else {
+          for (let r = cell.row; r < cell.row + rows; r += 1) {
+            height += rowPositions[r].height;
+          }
         }
         let width = 0;
-        for (let c = cell.col; c < cell.col + cols; c += 1) {
-          width += colPositions[c].width;
+        if (cols === 'window') {
+          width = gridLayoutRef.current.getWindowRect().width;
+        } else {
+          for (let c = cell.col; c < cell.col + cols; c += 1) {
+            width += colPositions[c].width;
+          }
         }
         return { width, height };
       }
@@ -699,8 +707,28 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     const hiddenCellKeys = useMemo(
       () =>
         cellSpans.reduce((keys, { row, rows, col, cols }) => {
-          for (let r = row; r < row + rows; r += 1) {
-            for (let c = col; c < col + cols; c += 1) {
+          let numRows: number;
+          if (rows === 'window') {
+            numRows = 0;
+            const cellBottom = rowPositions[row].y + gridLayoutRef.current.getWindowRect().height;
+            for (let r = row; rowPositions[r].y < cellBottom; r += 1) {
+              numRows += 1;
+            }
+          } else {
+            numRows = rows;
+          }
+          let numCols: number;
+          if (cols === 'window') {
+            numCols = 0;
+            const cellRight = colPositions[col].x + gridLayoutRef.current.getWindowRect().width;
+            for (let c = col; colPositions[c].x < cellRight; c += 1) {
+              numCols += 1;
+            }
+          } else {
+            numCols = cols;
+          }
+          for (let r = row; r < row + numRows; r += 1) {
+            for (let c = col; c < col + numCols; c += 1) {
               if (c !== col || r !== row) {
                 keys.push(`${r}-${c}`);
               }
@@ -708,7 +736,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           }
           return keys;
         }, [] as string[]),
-      [cellSpans],
+      [cellSpans, gridLayoutRef.current.getWindowRect().width, gridLayoutRef.current.getWindowRect().height],
     );
 
     const draggable = cellEventTypes.includes('dragstart');
@@ -773,32 +801,35 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
         let c = 0;
         while (colPositions[c].x < windowWidth) {
           const key = `${r}-${c}`;
-          const { x, width } = colPositions[c];
-          const cell = { row: r, col: c, data: rows[r][c] };
-          const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
-          const className = cellClassName ? cellClassName(cell) : undefined;
 
-          vRowCellElmnts.push(
-            <GridCell
-              key={key}
-              className={className}
-              row={r}
-              col={c}
-              left={x}
-              top={isRowStuck ? stuckY : y}
-              width={altSize.width || width}
-              height={altSize.height || height}
-              naturalHeightRow={height === -1 ? r : undefined}
-              naturalWidthCol={width === -1 ? c : undefined}
-              draggable={draggable}
-              zIndex={isRowStuck ? 1 : 0}
-            >
-              {renderCell(cell.data, cell)}
-            </GridCell>,
-          );
+          if (!hiddenCellKeys.includes(key)) {
+            const { x, width } = colPositions[c];
+            const cell = { row: r, col: c, data: rows[r][c] };
+            const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
+            const className = cellClassName ? cellClassName(cell) : undefined;
+
+            vRowCellElmnts.push(
+              <GridCell
+                key={key}
+                className={className}
+                row={r}
+                col={c}
+                left={x}
+                top={isRowStuck ? stuckY : y}
+                width={altSize.width || width}
+                height={altSize.height || height}
+                naturalHeightRow={height === -1 ? r : undefined}
+                naturalWidthCol={width === -1 ? c : undefined}
+                draggable={draggable}
+                zIndex={isRowStuck ? 1 : 0}
+              >
+                {renderCell(cell.data, cell)}
+              </GridCell>,
+            );
+          }
 
           const span = cellSpans.find(({ row, col }) => row === r && col === c) || { row: r, col: c, rows: 1, cols: 1 };
-          c += span.cols;
+          c += span.cols === 'window' ? 1 : span.cols;
         }
       });
 
@@ -828,32 +859,33 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
         let r = 0;
         while (rowPositions[r].y < windowHeight) {
           const key = `${r}-${c}`;
-          const { y, height } = rowPositions[r];
-          const cell = { row: r, col: c, data: rows[r][c] };
-          const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
-          const className = cellClassName ? cellClassName(cell) : undefined;
+          if (!hiddenCellKeys.includes(key)) {
+            const { y, height } = rowPositions[r];
+            const cell = { row: r, col: c, data: rows[r][c] };
+            const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
+            const className = cellClassName ? cellClassName(cell) : undefined;
 
-          vRowCellElmnts.push(
-            <GridCell
-              key={key}
-              className={className}
-              row={r}
-              col={c}
-              left={isColStuck ? stuckX : x}
-              top={y}
-              width={altSize.width || width}
-              height={altSize.height || height}
-              naturalHeightRow={height === -1 ? r : undefined}
-              naturalWidthCol={width === -1 ? c : undefined}
-              draggable={draggable}
-              zIndex={isColStuck ? 1 : 0}
-            >
-              {renderCell(cell.data, cell)}
-            </GridCell>,
-          );
-
+            vRowCellElmnts.push(
+              <GridCell
+                key={key}
+                className={className}
+                row={r}
+                col={c}
+                left={isColStuck ? stuckX : x}
+                top={y}
+                width={altSize.width || width}
+                height={altSize.height || height}
+                naturalHeightRow={height === -1 ? r : undefined}
+                naturalWidthCol={width === -1 ? c : undefined}
+                draggable={draggable}
+                zIndex={isColStuck ? 1 : 0}
+              >
+                {renderCell(cell.data, cell)}
+              </GridCell>,
+            );
+          }
           const span = cellSpans.find(({ row, col }) => row === r && col === c) || { row: r, col: c, rows: 1, cols: 1 };
-          r += span.rows;
+          r += span.rows === 'window' ? 1 : span.rows;
         }
       });
 
