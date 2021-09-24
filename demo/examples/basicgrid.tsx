@@ -114,29 +114,31 @@ export const CellSpan: FC = () => (
 //   </>
 // );
 
-// export const SuppressHorizontalScroll: FC = () => (
-//   <>
-//     <style>{theStyle}</style>
-//     <Scroller
-//       style={{ height: '500px', backgroundColor: '#ddd' }}
-//       rows={rows}
-//       cellClassName={({ row }) => (row === 5 ? 'theCell spanner' : 'theCell')}
-//       suppressHScrollRows={[5]}
-//     />
-//   </>
-// );
+export const SuppressHorizontalScroll: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <GridScroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={({ row }) => (row === 5 || row === 10 ? 'theCell spanner' : 'theCell')}
+      vRows={[5, 10]}
+      stickyRows={[5]}
+    />
+  </>
+);
 
-// export const SuppressVerticalScroll: FC = () => (
-//   <>
-//     <style>{theStyle}</style>
-//     <Scroller
-//       style={{ height: '500px', backgroundColor: '#ddd' }}
-//       rows={rows}
-//       cellClassName={({ col }) => (col === 5 ? 'theCell spanner' : 'theCell')}
-//       suppressVScrollCols={[5]}
-//     />
-//   </>
-// );
+export const SuppressVerticalScroll: FC = () => (
+  <>
+    <style>{theStyle}</style>
+    <GridScroller
+      style={{ height: '500px', backgroundColor: '#ddd' }}
+      rows={rows}
+      cellClassName={({ col }) => (col === 5 || col === 10 ? 'theCell spanner' : 'theCell')}
+      hCols={[5, 10]}
+      stickyCols={[5]}
+    />
+  </>
+);
 
 export const GridWithEvents: FC = () => (
   <>

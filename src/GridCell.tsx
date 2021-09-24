@@ -14,11 +14,25 @@ const GridCell: FC<{
   left: number;
   width: number;
   height: number;
+  zIndex?: number;
   naturalHeightRow?: number;
   naturalWidthCol?: number;
   draggable: boolean;
 }> = memo(
-  ({ className, row, col, top, left, width, height, naturalHeightRow, naturalWidthCol, draggable, children }) => {
+  ({
+    className,
+    row,
+    col,
+    top,
+    left,
+    width,
+    height,
+    zIndex,
+    naturalHeightRow,
+    naturalWidthCol,
+    draggable,
+    children,
+  }) => {
     const renderedCell = (
       <CellRoot
         className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
@@ -30,6 +44,7 @@ const GridCell: FC<{
           top: px(top),
           width: px(width),
           height: px(height),
+          zIndex,
         }}
       >
         {children}
