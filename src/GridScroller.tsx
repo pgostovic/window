@@ -70,7 +70,7 @@ interface FlexSize {
 }
 type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
 
-interface CellSpan {
+export interface CellSpan {
   row: number;
   col: number;
   rows: number | 'window';
@@ -236,6 +236,33 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     gridLayoutRef.current.setStickyRows(stickyRows);
     gridLayoutRef.current.setStickyCols(stickyCols);
 
+    /** Sync up the list of elements that only scroll vertically. */
+    const updateVRowElmnts = () => {
+      vRowElmntsRef.current = vRows.reduce(
+        (elmnts, r) =>
+          gridLayoutRef.current.getStuckRows()[r]
+            ? elmnts
+            : elmnts.concat(Array.prototype.slice.call(document.querySelectorAll(`.r${r}`)).map(elmnt => [r, elmnt])),
+        [] as [number, HTMLElement][],
+      );
+    };
+
+    /** Sync up the list of elements that only scroll horizontally. */
+    const updateHColElmnts = () => {
+      hColElmntsRef.current = hCols.reduce(
+        (elmnts, c) =>
+          gridLayoutRef.current.getStuckCols()[c]
+            ? elmnts
+            : elmnts.concat(Array.prototype.slice.call(document.querySelectorAll(`.c${c}`)).map(elmnt => [c, elmnt])),
+        [] as [number, HTMLElement][],
+      );
+    };
+
+    useEffect(() => {
+      updateVRowElmnts();
+      updateHColElmnts();
+    });
+
     /** Assign the updateHandler. */
     gridLayoutRef.current.updateHandler = (translate, { cells, stuckCols, stuckRows }, force) => {
       const cellsElmnt = cellsElmntRef.current;
@@ -256,10 +283,18 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
         stuckColCellsElmnt.style.transform = `translateY(${translate.y}px)`;
       }
 
+      if (stuckRows) {
+        updateVRowElmnts();
+      }
+
       vRowElmntsRef.current.forEach(([r, vRowCellElmnt]) => {
         const translateY = gridLayoutRef.current.getStuckRows()[r] ? 0 : translate.y;
         vRowCellElmnt.style.transform = `translateY(${translateY}px)`;
       });
+
+      if (stuckCols) {
+        updateHColElmnts();
+      }
 
       hColElmntsRef.current.forEach(([c, hColCellElmnt]) => {
         const translateX = gridLayoutRef.current.getStuckCols()[c] ? 0 : translate.x;
@@ -358,8 +393,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
      * Force a layout refresh when rows change.
      */
     useEffect(() => {
-      setRowHeightOverrides({});
-      setColWidthOverrides({});
       gridLayoutRef.current.refresh();
     }, [rows]);
 
@@ -661,24 +694,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       }
     }, [arrowScrollAmount]);
 
-    useEffect(() => {
-      vRowElmntsRef.current = vRows.reduce(
-        (elmnts, r) =>
-          stuckRows[r]
-            ? elmnts
-            : elmnts.concat(Array.prototype.slice.call(document.querySelectorAll(`.r${r}`)).map(elmnt => [r, elmnt])),
-        [] as [number, HTMLElement][],
-      );
-
-      hColElmntsRef.current = hCols.reduce(
-        (elmnts, c) =>
-          stuckCols[c]
-            ? elmnts
-            : elmnts.concat(Array.prototype.slice.call(document.querySelectorAll(`.c${c}`)).map(elmnt => [c, elmnt])),
-        [] as [number, HTMLElement][],
-      );
-    });
-
     const getAltCellSize = (cell: Cell) => {
       const cellSpan = cellSpans.find(({ row, col }) => row === cell.row && col === cell.col);
       if (cellSpan) {
@@ -865,7 +880,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
             const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
             const className = cellClassName ? cellClassName(cell) : undefined;
 
-            vRowCellElmnts.push(
+            hColCellElmnts.push(
               <GridCell
                 key={key}
                 className={className}
@@ -893,32 +908,30 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     let stuckRowsHeight = 0;
     Object.entries(stuckRows).forEach(([row, pos]) => {
       const r = Number(row);
-      if (!vRows.includes(r)) {
-        for (let c = fromCol; c < toCol; c += 1) {
-          const key = `${r}-${c}`;
-          if (!stuckCols[c] && !hiddenCellKeys.includes(key)) {
-            const cell = { row: r, col: c, data: rows[r][c] };
-            const { x, width } = colPositions[c];
-            const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
-            const className = cellClassName ? cellClassName(cell) : undefined;
-            stuckRowCellElmnts.push(
-              <GridCell
-                key={key}
-                className={className}
-                row={r}
-                col={c}
-                left={x}
-                top={pos.y}
-                width={altSize.width || width}
-                height={altSize.height || pos.height}
-                naturalHeightRow={pos.height === -1 ? r : undefined}
-                naturalWidthCol={width === -1 ? c : undefined}
-                draggable={draggable}
-              >
-                {renderCell(cell.data, cell)}
-              </GridCell>,
-            );
-          }
+      for (let c = fromCol; c < toCol; c += 1) {
+        const key = `${r}-${c}`;
+        if (!stuckCols[c] && !hiddenCellKeys.includes(key)) {
+          const cell = { row: r, col: c, data: rows[r][c] };
+          const { x, width } = colPositions[c];
+          const altSize = getAltCellSize(cell) || { width: undefined, height: undefined };
+          const className = cellClassName ? cellClassName(cell) : undefined;
+          stuckRowCellElmnts.push(
+            <GridCell
+              key={key}
+              className={className}
+              row={r}
+              col={c}
+              left={x}
+              top={pos.y}
+              width={altSize.width || width}
+              height={altSize.height || pos.height}
+              naturalHeightRow={pos.height === -1 ? r : undefined}
+              naturalWidthCol={width === -1 ? c : undefined}
+              draggable={draggable}
+            >
+              {renderCell(cell.data, cell)}
+            </GridCell>,
+          );
         }
       }
       stuckRowsHeight += pos.height;
@@ -929,7 +942,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     Object.entries(stuckCols).forEach(([col, pos]) => {
       const c = Number(col);
       for (let r = fromRow; r < toRow; r += 1) {
-        if (!stuckRows[r]) {
+        if (!stuckRows[r] && !vRows.includes(r)) {
           const key = `${r}-${c}`;
           if (!hiddenCellKeys.includes(key)) {
             const { y, height } = rowPositions[r];
@@ -1023,6 +1036,34 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
             >
               {cellElmnts}
             </Cells>
+            <HColCells className={`${scrollerId}-cells`}>{hColCellElmnts}</HColCells>
+            {stuckColCellElmnts.length > 0 && (
+              <StuckCells
+                ref={stuckColCellsElmntRef}
+                className={`${scrollerId}-cells stickyCols`}
+                style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
+              >
+                {stuckColCellElmnts}
+              </StuckCells>
+            )}
+            <VRowCells className={`${scrollerId}-cells`}>{vRowCellElmnts}</VRowCells>
+            {stuckRowCellElmnts.length > 0 && (
+              <StuckCells
+                ref={stuckRowCellsElmntRef}
+                className={`${scrollerId}-cells stickyRows`}
+                style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
+              >
+                {stuckRowCellElmnts}
+              </StuckCells>
+            )}
+            {stuckCellElmnts.length > 0 && (
+              <StuckCells
+                className={`${scrollerId}-cells stickyCells`}
+                style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
+              >
+                {stuckCellElmnts}
+              </StuckCells>
+            )}
             <VScrollBar
               ref={vScrollBarRef}
               orientation="vertical"
@@ -1039,34 +1080,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
               barSize={gridLayoutRef.current.getWindowRect().width / gridSize.width}
               onScroll={onHScroll}
             />
-            {vRowCellElmnts}
-            {hColCellElmnts}
-            {stuckRowCellElmnts.length > 0 && (
-              <StuckCells
-                ref={stuckRowCellsElmntRef}
-                className={`${scrollerId}-cells stickyRows`}
-                style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
-              >
-                {stuckRowCellElmnts}
-              </StuckCells>
-            )}
-            {stuckColCellElmnts.length > 0 && (
-              <StuckCells
-                ref={stuckColCellsElmntRef}
-                className={`${scrollerId}-cells stickyCols`}
-                style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
-              >
-                {stuckColCellElmnts}
-              </StuckCells>
-            )}
-            {stuckCellElmnts.length > 0 && (
-              <StuckCells
-                className={`${scrollerId}-cells stickyCells`}
-                style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
-              >
-                {stuckCellElmnts}
-              </StuckCells>
-            )}
           </Root>
           {overlay && <Overlay className="overlay">{overlay}</Overlay>}
         </FixedMargin>
@@ -1093,6 +1106,22 @@ const Root = styled.div`
 
 const Cells = styled.div`
   position: relative;
+  will-change: transform;
+`;
+
+const VRowCells = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: inherit;
+  will-change: transform;
+`;
+
+const HColCells = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: inherit;
   will-change: transform;
 `;
 
