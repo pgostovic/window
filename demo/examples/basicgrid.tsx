@@ -19,6 +19,10 @@ const theStyle = `
     height: 100%;
   }
 
+  .highlighted {
+    background-color: #9e9;
+  }
+
   .theCell {
     border-top: 1px solid #ccc;
     border-left: 1px solid #ccc;
@@ -28,7 +32,7 @@ const theStyle = `
   }
 
   .stickyRows {
-    border-bottom: 2px solid #999;
+    border-bottom: 2px solid #999;  
   }
 
   .stickyCols {
@@ -120,10 +124,10 @@ export const SuppressHorizontalScroll: FC = () => (
     <GridScroller
       style={{ height: '500px', backgroundColor: '#ddd' }}
       rows={rows}
-      cellClassName={({ row }) => (row === 5 || row === 10 ? 'theCell spanner' : 'theCell')}
+      cellClassName={({ row }) => (row === 5 || row === 10 ? 'theCell highlighted' : 'theCell')}
       vRows={[5, 10]}
       cellSpans={[{ row: 10, col: 0, rows: 1, cols: 'window' }]}
-      stickyRows={[5]}
+      stickyRows={[5, 7]}
     />
   </>
 );
