@@ -751,7 +751,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           if (rows === 'window') {
             numRows = 0;
             const cellBottom = rowPositions[row].y + gridLayoutRef.current.getWindowRect().height;
-            for (let r = row; rowPositions[r].y < cellBottom; r += 1) {
+            for (let r = row; r < rowPositions.length && rowPositions[r].y < cellBottom; r += 1) {
               numRows += 1;
             }
           } else {
@@ -761,7 +761,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           if (cols === 'window') {
             numCols = 0;
             const cellRight = colPositions[col].x + gridLayoutRef.current.getWindowRect().width;
-            for (let c = col; colPositions[c].x < cellRight; c += 1) {
+            for (let c = col; c < colPositions.length && colPositions[c].x < cellRight; c += 1) {
               numCols += 1;
             }
           } else {
@@ -838,8 +838,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
         }
 
         const windowWidth = gridLayoutRef.current.getWindowRect().width;
-        let c = 0;
-        while (colPositions[c].x < windowWidth) {
+        for (let c = 0; c < colPositions.length && colPositions[c].x < windowWidth; ) {
           const key = `${r}-${c}`;
 
           if (!hiddenCellKeys.includes(key)) {
@@ -896,8 +895,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
         }
 
         const windowHeight = gridLayoutRef.current.getWindowRect().height;
-        let r = 0;
-        while (rowPositions[r].y < windowHeight) {
+        for (let r = 0; r < rowPositions.length && rowPositions[r].y < windowHeight; ) {
           const key = `${r}-${c}`;
           if (!hiddenCellKeys.includes(key)) {
             const { y, height } = rowPositions[r];
@@ -1178,8 +1176,19 @@ const Overlay = styled.div`
   flex-direction: column;
 `;
 
-const to2d = (rows: Array<unknown | unknown[]>): unknown[][] =>
-  rows.map(row => (row instanceof Array ? (row as unknown[]) : [row]));
+const to2d = (rows: Array<unknown | unknown[]>): unknown[][] => {
+  let maxWidth = 0;
+  return rows
+    .map(row => {
+      if (row instanceof Array) {
+        maxWidth = Math.max(maxWidth, row.length);
+        return row;
+      }
+      maxWidth = Math.max(maxWidth, 1);
+      return [row];
+    })
+    .map(row => (row.length < maxWidth ? [...row, ...Array(maxWidth - row.length).fill('')] : row));
+};
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
