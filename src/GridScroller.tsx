@@ -1070,35 +1070,29 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
 
             {hColCellElmnts}
 
-            {stuckColCellElmnts.length > 0 && (
-              <StuckCells
-                ref={stuckColCellsElmntRef}
-                className={`${scrollerId}-cells stickyCols`}
-                style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
-              >
-                {stuckColCellElmnts}
-              </StuckCells>
-            )}
+            <StuckCells
+              ref={stuckColCellsElmntRef}
+              className={`${scrollerId}-cells stickyCols`}
+              style={{ width: px(stuckColsWidth), height: px(gridSize.height) }}
+            >
+              {stuckColCellElmnts}
+            </StuckCells>
 
             {vRowCellElmnts}
 
-            {stuckRowCellElmnts.length > 0 && (
-              <StuckCells
-                ref={stuckRowCellsElmntRef}
-                className={`${scrollerId}-cells stickyRows`}
-                style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
-              >
-                {stuckRowCellElmnts}
-              </StuckCells>
-            )}
-            {stuckCellElmnts.length > 0 && (
-              <StuckCells
-                className={`${scrollerId}-cells stickyCells`}
-                style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
-              >
-                {stuckCellElmnts}
-              </StuckCells>
-            )}
+            <StuckCells
+              ref={stuckRowCellsElmntRef}
+              className={`${scrollerId}-cells stickyRows`}
+              style={{ height: px(stuckRowsHeight), width: px(gridSize.width) }}
+            >
+              {stuckRowCellElmnts}
+            </StuckCells>
+            <StuckCells
+              className={`${scrollerId}-cells stickyCells`}
+              style={{ height: px(stuckRowsHeight), width: px(stuckColsWidth) }}
+            >
+              {stuckCellElmnts}
+            </StuckCells>
             <VScrollBar
               ref={vScrollBarRef}
               orientation="vertical"
@@ -1150,6 +1144,10 @@ const StuckCells = styled.div`
   left: 0;
   background: inherit;
   will-change: transform;
+
+  &:empty {
+    display: none;
+  }
 `;
 
 const VScrollBar = styled(ScrollBar)`
