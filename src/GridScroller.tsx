@@ -2,6 +2,7 @@ import React, {
   CSSProperties,
   FC,
   forwardRef,
+  KeyboardEvent,
   Profiler,
   ProfilerProps,
   ReactElement,
@@ -44,25 +45,28 @@ export interface ScrollerRef {
   setScrollPosition(offset: { left: number; top: number }): void;
 }
 
-export type EventType =
-  | 'click'
-  | 'contextmenu'
-  | 'dblclick'
-  | 'drag'
-  | 'dragend'
-  | 'dragenter'
-  | 'dragexit'
-  | 'dragleave'
-  | 'dragover'
-  | 'dragstart'
-  | 'drop'
-  | 'mousedown'
-  | 'mouseenter'
-  | 'mouseleave'
-  | 'mousemove'
-  | 'mouseout'
-  | 'mouseover'
-  | 'mouseup';
+const EventPropsByType = {
+  click: 'onClick',
+  contextmenu: 'onContextMenu',
+  dblclick: 'onDoubleClick',
+  drag: 'onDrag',
+  dragend: 'onDragEnd',
+  dragenter: 'onDragEnter',
+  dragexit: 'onDragExit',
+  dragleave: 'onDragLeave',
+  dragover: 'onDragOver',
+  dragstart: 'onDragStart',
+  drop: 'onDrop',
+  mousedown: 'onMouseDown',
+  mouseenter: 'onMouseEnter',
+  mouseleave: 'onMouseLeave',
+  mousemove: 'onMouseMove',
+  mouseout: 'onMouseOut',
+  mouseover: 'onMouseOver',
+  mouseup: 'onMouseUp',
+};
+
+export type EventType = keyof typeof EventPropsByType;
 
 interface FlexSize {
   flex: number;
@@ -559,51 +563,66 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
      * hanlder invokation on the "current" hovered cell.
      */
     const currentHoverCell = useRef<Cell>();
-    useEffect(() => {
-      const rootElmnt = rootElmntRef.current;
-      if (onCellEvent && rootElmnt) {
-        const types = new Set<EventType>(
+
+    const effCellEventTypes = useMemo(
+      () =>
+        new Set<EventType>(
           cellEventTypes.includes('mouseenter') || cellEventTypes.includes('mouseleave')
             ? [...cellEventTypes, 'mouseover', 'mouseleave']
             : cellEventTypes,
-        );
+        ),
+      [cellEventTypes],
+    );
 
-        const handler = (event: Event) => {
-          const cell = cellFromEvent(event, rows, `${scrollerId}-cells`);
-          if (cell && types.has(event.type as EventType)) {
-            if (
-              (types.has('mouseenter') || types.has('mouseleave')) &&
-              event.type === 'mouseover' &&
-              !sameCell(cell, currentHoverCell.current)
-            ) {
-              if (currentHoverCell.current && cellEventTypes.includes('mouseleave')) {
-                onCellEvent('mouseleave', currentHoverCell.current, event);
-              }
-              if (cell && cellEventTypes.includes('mouseenter')) {
-                onCellEvent('mouseenter', cell, event);
-              }
-              currentHoverCell.current = cell;
-            }
+    const handleCellEvent = useCallback(
+      (event: Event) => {
+        if (!onCellEvent) {
+          return;
+        }
 
-            if (cellEventTypes.includes(event.type as EventType)) {
-              onCellEvent(event.type as EventType, cell, event);
-            }
-          } else if (
-            currentHoverCell.current &&
-            event.type === 'mouseleave' &&
-            (event.target as Element).id === scrollerId
+        console.log('EVENT BRO', event);
+
+        const cell = cellFromEvent(event, rows, `${scrollerId}-cells`);
+        if (cell && effCellEventTypes.has(event.type as EventType)) {
+          // console.log('EVENT', event.prop);
+
+          if (
+            (effCellEventTypes.has('mouseenter') || effCellEventTypes.has('mouseleave')) &&
+            event.type === 'mouseover' &&
+            !sameCell(cell, currentHoverCell.current)
           ) {
-            if (cellEventTypes.includes('mouseleave')) {
+            if (currentHoverCell.current && cellEventTypes.includes('mouseleave')) {
               onCellEvent('mouseleave', currentHoverCell.current, event);
             }
-            currentHoverCell.current = undefined;
+            if (cell && cellEventTypes.includes('mouseenter')) {
+              onCellEvent('mouseenter', cell, event);
+            }
+            currentHoverCell.current = cell;
           }
-        };
 
-        types.forEach(eventType => rootElmnt.addEventListener(eventType, handler));
-        return () => types.forEach(eventType => rootElmnt.removeEventListener(eventType, handler));
-      }
-    }, [cellEventTypes, onCellEvent, rows]);
+          if (cellEventTypes.includes(event.type as EventType)) {
+            onCellEvent(event.type as EventType, cell, event);
+          }
+        } else if (
+          currentHoverCell.current &&
+          event.type === 'mouseleave' &&
+          ((event.target as Element).id === scrollerId ||
+            (event.target as Element).matches(HScrollBar.toString()) ||
+            (event.target as Element).matches(VScrollBar.toString()))
+        ) {
+          if (cellEventTypes.includes('mouseleave')) {
+            onCellEvent('mouseleave', currentHoverCell.current, event);
+          }
+          currentHoverCell.current = undefined;
+        }
+      },
+      [rows, onCellEvent, effCellEventTypes],
+    );
+
+    const handlerProps = Array.from(effCellEventTypes).reduce(
+      (props, type) => ({ ...props, [EventPropsByType[type]]: handleCellEvent }),
+      {} as { [key: string]: (event: Event) => void },
+    );
 
     /**
      * Row/column heights/widths can be specified as "natural". A row with a natural height
@@ -663,61 +682,55 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     /**
      * Handle keyboard navigation with arrow keys, etc.
      */
-    useEffect(() => {
-      const rootElmnt = rootElmntRef.current;
-      if (arrowScrollAmount && rootElmnt) {
-        const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.y;
-        const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount.x;
-        const handleKey = (event: KeyboardEvent) => {
-          const gridLayout = gridLayoutRef.current;
-          let handled = true;
-          switch ([event.key, event.metaKey ? 'Meta' : undefined].filter(Boolean).join(':')) {
-            case 'ArrowUp':
-              gridLayout.moveWindowBy(0, -yScrollAmount);
-              break;
-            case 'ArrowDown':
-              gridLayout.moveWindowBy(0, yScrollAmount);
-              break;
-            case 'ArrowLeft':
-              gridLayout.moveWindowBy(-xScrollAmount, 0);
-              break;
-            case 'ArrowRight':
-              gridLayout.moveWindowBy(xScrollAmount, 0);
-              break;
-            case 'PageUp':
-              gridLayout.pageUp();
-              break;
-            case 'PageDown':
-            case ' ': // Space
-              gridLayout.pageDown();
-              break;
-            case 'Home':
-            case 'ArrowUp:Meta':
-              gridLayout.moveToTop();
-              break;
-            case 'End':
-            case 'ArrowDown:Meta':
-              gridLayout.moveToBottom();
-              break;
-            case 'ArrowLeft:Meta':
-              gridLayout.moveToLeft();
-              break;
-            case 'ArrowRight:Meta':
-              gridLayout.moveToRight();
-              break;
-            default:
-              handled = false;
-          }
-          if (handled) {
-            event.preventDefault();
-          }
-        };
-        rootElmnt.addEventListener('keydown', handleKey);
-        return () => {
-          rootElmnt.removeEventListener('keydown', handleKey);
-        };
-      }
-    }, [arrowScrollAmount]);
+    const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount?.y || 0;
+    const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount?.x || 0;
+    const arrowKeyHandler = useCallback(
+      (event: KeyboardEvent<HTMLDivElement>) => {
+        const gridLayout = gridLayoutRef.current;
+        let handled = true;
+        switch ([event.key, event.metaKey ? 'Meta' : undefined].filter(Boolean).join(':')) {
+          case 'ArrowUp':
+            gridLayout.moveWindowBy(0, -yScrollAmount);
+            break;
+          case 'ArrowDown':
+            gridLayout.moveWindowBy(0, yScrollAmount);
+            break;
+          case 'ArrowLeft':
+            gridLayout.moveWindowBy(-xScrollAmount, 0);
+            break;
+          case 'ArrowRight':
+            gridLayout.moveWindowBy(xScrollAmount, 0);
+            break;
+          case 'PageUp':
+            gridLayout.pageUp();
+            break;
+          case 'PageDown':
+          case ' ': // Space
+            gridLayout.pageDown();
+            break;
+          case 'Home':
+          case 'ArrowUp:Meta':
+            gridLayout.moveToTop();
+            break;
+          case 'End':
+          case 'ArrowDown:Meta':
+            gridLayout.moveToBottom();
+            break;
+          case 'ArrowLeft:Meta':
+            gridLayout.moveToLeft();
+            break;
+          case 'ArrowRight:Meta':
+            gridLayout.moveToRight();
+            break;
+          default:
+            handled = false;
+        }
+        if (handled) {
+          event.preventDefault();
+        }
+      },
+      [arrowScrollAmount],
+    );
 
     const getAltCellSize = (cell: Cell) => {
       const cellSpan = cellSpans.find(({ row, col }) => row === cell.row && col === cell.col);
@@ -1056,7 +1069,13 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     return (
       <Prof enabled={logPerfStats} onRender={onRender}>
         <FixedMargin style={style} className={className} {...fixedMargin}>
-          <Root ref={rootElmntRef} id={scrollerId} tabIndex={arrowScrollAmount ? 0 : undefined}>
+          <Root
+            ref={rootElmntRef}
+            id={scrollerId}
+            tabIndex={arrowScrollAmount ? 0 : undefined}
+            onKeyDown={arrowKeyHandler}
+            {...handlerProps}
+          >
             <Cells
               ref={cellsElmntRef}
               className={`${scrollerId}-cells`}
