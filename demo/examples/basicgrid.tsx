@@ -154,25 +154,8 @@ export const GridWithEvents: FC = () => (
       rows={rows}
       cellClassName={() => 'theCell'}
       cellEventTypes={['mousedown', 'mouseup', 'mouseenter', 'mouseleave']}
-      onCellEvent={(type, cell) => console.log('EVENT outer', type, cell)}
-    >
-      {(text: string) => (
-        <div
-          onClick={function innerClick(event) {
-            console.log('Click inner', event.target);
-          }}
-        >
-          <div
-            onClick={function superInnerClick(event) {
-              // event.stopPropagation();
-              console.log('Click super inner', event.target);
-            }}
-          >
-            {text}
-          </div>
-        </div>
-      )}
-    </GridScroller>
+      onCellEvent={(type, cell) => console.log('EVENT', type, cell)}
+    />
   </>
 );
 

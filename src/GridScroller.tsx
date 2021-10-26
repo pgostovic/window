@@ -580,12 +580,8 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           return;
         }
 
-        console.log('EVENT BRO', event);
-
         const cell = cellFromEvent(event, rows, `${scrollerId}-cells`);
         if (cell && effCellEventTypes.has(event.type as EventType)) {
-          // console.log('EVENT', event.prop);
-
           if (
             (effCellEventTypes.has('mouseenter') || effCellEventTypes.has('mouseleave')) &&
             event.type === 'mouseover' &&
