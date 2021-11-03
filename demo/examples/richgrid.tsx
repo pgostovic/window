@@ -55,12 +55,23 @@ export const RichGrid: FC = () => (
       stickyRows={[0, 1, 5, 10]}
       stickyCols={[0]}
       colWidth={c => (c === 0 ? { flex: 1, min: 250 } : 130)}
+      arrowScrollAmount={50}
     >
-      {(data, { col }) => <Cell>{col === 2 ? <Email email={data as string} /> : data}</Cell>}
+      {(data, { col }) => (
+        <Cell>
+          {col === 0 ? (
+            <input type="text" placeholder="Email" defaultValue={data as string} />
+          ) : col === 2 ? (
+            <Red text={data as string} />
+          ) : (
+            data
+          )}
+        </Cell>
+      )}
     </GridScroller>
   </>
 );
 
-const Email: FC<{ email: string }> = memo(({ email }) => {
-  return <div style={{ color: 'red' }}>{email}</div>;
+const Red: FC<{ text: string }> = memo(({ text }) => {
+  return <div style={{ color: 'red' }}>{text}</div>;
 });

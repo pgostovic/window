@@ -682,47 +682,49 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount?.x || 0;
     const arrowKeyHandler = useCallback(
       (event: KeyboardEvent<HTMLDivElement>) => {
-        const gridLayout = gridLayoutRef.current;
-        let handled = true;
-        switch ([event.key, event.metaKey ? 'Meta' : undefined].filter(Boolean).join(':')) {
-          case 'ArrowUp':
-            gridLayout.moveWindowBy(0, -yScrollAmount);
-            break;
-          case 'ArrowDown':
-            gridLayout.moveWindowBy(0, yScrollAmount);
-            break;
-          case 'ArrowLeft':
-            gridLayout.moveWindowBy(-xScrollAmount, 0);
-            break;
-          case 'ArrowRight':
-            gridLayout.moveWindowBy(xScrollAmount, 0);
-            break;
-          case 'PageUp':
-            gridLayout.pageUp();
-            break;
-          case 'PageDown':
-          case ' ': // Space
-            gridLayout.pageDown();
-            break;
-          case 'Home':
-          case 'ArrowUp:Meta':
-            gridLayout.moveToTop();
-            break;
-          case 'End':
-          case 'ArrowDown:Meta':
-            gridLayout.moveToBottom();
-            break;
-          case 'ArrowLeft:Meta':
-            gridLayout.moveToLeft();
-            break;
-          case 'ArrowRight:Meta':
-            gridLayout.moveToRight();
-            break;
-          default:
-            handled = false;
-        }
-        if (handled) {
-          event.preventDefault();
+        if (event.target === rootElmntRef.current) {
+          const gridLayout = gridLayoutRef.current;
+          let handled = true;
+          switch ([event.key, event.metaKey ? 'Meta' : undefined].filter(Boolean).join(':')) {
+            case 'ArrowUp':
+              gridLayout.moveWindowBy(0, -yScrollAmount);
+              break;
+            case 'ArrowDown':
+              gridLayout.moveWindowBy(0, yScrollAmount);
+              break;
+            case 'ArrowLeft':
+              gridLayout.moveWindowBy(-xScrollAmount, 0);
+              break;
+            case 'ArrowRight':
+              gridLayout.moveWindowBy(xScrollAmount, 0);
+              break;
+            case 'PageUp':
+              gridLayout.pageUp();
+              break;
+            case 'PageDown':
+            case ' ': // Space
+              gridLayout.pageDown();
+              break;
+            case 'Home':
+            case 'ArrowUp:Meta':
+              gridLayout.moveToTop();
+              break;
+            case 'End':
+            case 'ArrowDown:Meta':
+              gridLayout.moveToBottom();
+              break;
+            case 'ArrowLeft:Meta':
+              gridLayout.moveToLeft();
+              break;
+            case 'ArrowRight:Meta':
+              gridLayout.moveToRight();
+              break;
+            default:
+              handled = false;
+          }
+          if (handled) {
+            event.preventDefault();
+          }
         }
       },
       [arrowScrollAmount],
