@@ -35,9 +35,15 @@ export const ItemSizes: FC = () => {
   });
   return (
     <>
-      <button onClick={() => setSlice(5)}>Slice 5</button>
-      <button onClick={() => setSlice(25)}>Slice 25</button>
-      <button onClick={() => setSlice(1000)}>Slice 1000</button>
+      <button type="button" onClick={() => setSlice(5)}>
+        Slice 5
+      </button>
+      <button type="button" onClick={() => setSlice(25)}>
+        Slice 25
+      </button>
+      <button type="button" onClick={() => setSlice(1000)}>
+        Slice 1000
+      </button>
       <GridScroller
         ref={windowRef}
         style={{ height: '500px', width: '200px' }}
@@ -45,13 +51,40 @@ export const ItemSizes: FC = () => {
         rowHeight={index => slicedSizes[index]}
         initScrollPosition={offset}
       >
-        {(num: number, { row }) => (
-          <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center', height: '100%' }}>
-            <span style={{ flex: 1 }}>{num}</span>
-            <span style={{ fontSize: 'small', color: '#999' }}>{slicedSizes[row]}px</span>
-          </div>
-        )}
+        {(num: number, { row }) =>
+          row === 50 ? (
+            <Fifty />
+          ) : (
+            <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center', height: '100%' }}>
+              <span style={{ flex: 1 }}>{num}</span>
+              <span style={{ fontSize: 'small', color: '#999' }}>{slicedSizes[row]}px</span>
+            </div>
+          )
+        }
       </GridScroller>
     </>
+  );
+};
+
+const Fifty: FC = () => {
+  const [showMore, setShowMore] = useState(false);
+  return (
+    <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+      <div>
+        FIFTY
+        <button type="button" onClick={() => setShowMore(!showMore)}>
+          show/hide more
+        </button>
+      </div>
+      {showMore && (
+        <div>
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas in blandit ante. Ut at malesuada ante.
+          Aenean a dolor sed sem accumsan consectetur in vitae urna. Fusce eu augue sed mauris commodo accumsan. Nam
+          lacus quam, hendrerit nec justo ut, sagittis consequat ante. In elementum, ex at varius pellentesque, quam
+          mauris tincidunt ipsum, eu tristique leo velit eu libero. Nunc tincidunt dignissim iaculis. Duis at arcu
+          tincidunt, tincidunt erat at, varius orci.
+        </div>
+      )}
+    </div>
   );
 };

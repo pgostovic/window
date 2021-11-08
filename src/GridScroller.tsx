@@ -10,7 +10,6 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -231,6 +230,95 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       gridLayout.setColWidths(widths);
       return gridLayout.getColPositions();
     }, [rows, colWidth, colWidthOverrides, gridLayoutRef.current.getWindowRect().width]);
+
+    /**
+     * Row/column heights/widths can be specified as "natural". A row with a natural height
+     * will be assigned a "row height override" based on measuring its rendered cell heights
+     * and using the maximum. Similar for columns.
+     */
+    const naturalHeightRows = useMemo(() => getNaturals(rowHeight, numRows), [rowHeight, numRows]);
+    const naturalWidthCols = useMemo(() => getNaturals(colWidth, numCols), [colWidth, numCols]);
+
+    const naturalsResizeObserver = useMemo(
+      () =>
+        new ResizeObserver(entries => {
+          const rowHeightUpdates: SizeOverrides = {};
+          const colWidthUpdates: SizeOverrides = {};
+          let hasRowHeightUpdate = false;
+          let hasColWidthUpdates = false;
+          entries.forEach(entry => {
+            const cellElmnt = entry.target.parentElement;
+            let row: number | undefined;
+            let col: number | undefined;
+            cellElmnt?.className.split(/\s+/).forEach(cn => {
+              const m = cn.match(/([rc])(\d+)/);
+              if (m && m[1] === 'r') {
+                row = Number(m[2]);
+              } else if (m && m[1] === 'c') {
+                col = Number(m[2]);
+              }
+            });
+
+            if (
+              typeof row === 'number' &&
+              naturalHeightRows.includes(row) &&
+              entry.contentRect.height !== rowHeightOverrides[row]
+            ) {
+              rowHeightUpdates[row] = entry.contentRect.height;
+              hasRowHeightUpdate = true;
+            }
+
+            if (
+              typeof col === 'number' &&
+              naturalWidthCols.includes(col) &&
+              entry.contentRect.width !== colWidthOverrides[col]
+            ) {
+              colWidthUpdates[col] = entry.contentRect.width;
+              hasColWidthUpdates = true;
+            }
+          });
+
+          if (hasRowHeightUpdate) {
+            setRowHeightOverrides({ ...rowHeightOverrides, ...rowHeightUpdates });
+          }
+          if (hasColWidthUpdates) {
+            setRowHeightOverrides({ ...colWidthOverrides, ...colWidthUpdates });
+          }
+
+          if (hasRowHeightUpdate || hasColWidthUpdates) {
+            gridLayoutRef.current.refresh();
+          }
+        }),
+      [naturalHeightRows, rowHeightOverrides, naturalWidthCols, colWidthOverrides],
+    );
+
+    useEffect(() => {
+      return () => naturalsResizeObserver.disconnect();
+    }, [rowHeightOverrides, colWidthOverrides]);
+
+    useEffect(() => {
+      naturalsResizeObserver.disconnect();
+
+      naturalHeightRows.forEach(naturalHeightRow => {
+        document
+          .querySelectorAll(
+            `.${scrollerId}-cells > div.r${naturalHeightRow} > *, #${scrollerId} > div.loose.r${naturalHeightRow} > *`,
+          )
+          .forEach(cellElmnt => {
+            naturalsResizeObserver.observe(cellElmnt);
+          });
+      });
+
+      naturalWidthCols.forEach(naturalWidthCol => {
+        document
+          .querySelectorAll(
+            `.${scrollerId}-cells > div.c${naturalWidthCol} > *, #${scrollerId} > div.loose.c${naturalWidthCol} > *`,
+          )
+          .forEach(cellElmnt => {
+            naturalsResizeObserver.observe(cellElmnt);
+          });
+      });
+    });
 
     const isVerticallyScrollable = gridLayoutRef.current.getScrollability().vertical;
     const isHorizontallyScrollable = gridLayoutRef.current.getScrollability().horizontal;
@@ -621,61 +709,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     );
 
     /**
-     * Row/column heights/widths can be specified as "natural". A row with a natural height
-     * will be assigned a "row height override" based on measuring its rendered cell heights
-     * and using the maximum. Similar for columns.
-     */
-    useLayoutEffect(() => {
-      let hasNewHeightOverrides = false;
-      for (let r = fromRow; r < toRow && !hasNewHeightOverrides; r += 1) {
-        if (rowPositions[r].height === -1 && rowHeightOverrides[r] === undefined) {
-          hasNewHeightOverrides = true;
-        }
-      }
-      let hasNewWidthOverrides = false;
-      for (let c = fromCol; c < toCol && !hasNewWidthOverrides; c += 1) {
-        if (colPositions[c].width === -1 && colWidthOverrides[c] === undefined) {
-          hasNewWidthOverrides = true;
-        }
-      }
-
-      let overridesSet = false;
-      if (hasNewHeightOverrides) {
-        const hOverrides: SizeOverrides = {};
-        document
-          .querySelectorAll(
-            `.${scrollerId}-cells > div[data-natural-height-row], #${scrollerId} > div.loose[data-natural-height-row]`,
-          )
-          .forEach(cellElmnt => {
-            const row = Number(cellElmnt.getAttribute('data-natural-height-row'));
-            const { height } = cellElmnt.getBoundingClientRect();
-            hOverrides[row] = Math.max(hOverrides[row] || 0, height);
-            overridesSet = overridesSet || true;
-          });
-        setRowHeightOverrides(rho => ({ ...rho, ...hOverrides }));
-      }
-
-      if (hasNewWidthOverrides) {
-        const wOverrides: SizeOverrides = {};
-        document
-          .querySelectorAll(
-            `.${scrollerId}-cells > div[data-natural-width-col], #${scrollerId} > div.loose[data-natural-width-col]`,
-          )
-          .forEach(cellElmnt => {
-            const col = Number(cellElmnt.getAttribute('data-natural-width-col'));
-            const { width } = cellElmnt.getBoundingClientRect();
-            wOverrides[col] = Math.max(wOverrides[col] || 0, width);
-            overridesSet = overridesSet || true;
-          });
-        setColWidthOverrides(cwo => ({ ...cwo, ...wOverrides }));
-      }
-
-      if (overridesSet) {
-        render(r => !r);
-      }
-    });
-
-    /**
      * Handle keyboard navigation with arrow keys, etc.
      */
     const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount?.y || 0;
@@ -814,8 +847,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
                 top={y}
                 width={altSize.width || width}
                 height={altSize.height || height}
-                naturalHeightRow={height === -1 ? r : undefined}
-                naturalWidthCol={width === -1 ? c : undefined}
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
@@ -868,8 +899,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
                 top={isRowStuck ? stuckY : y}
                 width={altSize.width || width}
                 height={altSize.height || height}
-                naturalHeightRow={height === -1 ? r : undefined}
-                naturalWidthCol={width === -1 ? c : undefined}
                 draggable={draggable}
                 zIndex={isRowStuck ? 1 : 0}
               >
@@ -924,8 +953,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
                 top={y}
                 width={altSize.width || width}
                 height={altSize.height || height}
-                naturalHeightRow={height === -1 ? r : undefined}
-                naturalWidthCol={width === -1 ? c : undefined}
                 draggable={draggable}
                 zIndex={isColStuck ? 1 : 0}
               >
@@ -960,8 +987,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
                 top={pos.y}
                 width={altSize.width || width}
                 height={altSize.height || pos.height}
-                naturalHeightRow={pos.height === -1 ? r : undefined}
-                naturalWidthCol={width === -1 ? c : undefined}
                 draggable={draggable}
               >
                 {renderCell(cell.data, cell)}
@@ -998,8 +1023,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
                   top={y}
                   width={altSize.width || pos.width}
                   height={altSize.height || height}
-                  naturalHeightRow={height === -1 ? r : undefined}
-                  naturalWidthCol={pos.width === -1 ? c : undefined}
                   draggable={draggable}
                 >
                   {renderCell(cell.data, cell)}
@@ -1034,8 +1057,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
             top={y}
             width={width}
             height={height}
-            naturalHeightRow={height === -1 ? r : undefined}
-            naturalWidthCol={width === -1 ? c : undefined}
             draggable={draggable}
           >
             {renderCell(cell.data, cell)}
@@ -1233,6 +1254,19 @@ const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number, size
       return sizes.map((s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.min));
     }
   }
+};
+
+const getNaturals = (itemSize: ItemSize, num: number) => {
+  if (typeof itemSize === 'number') {
+    return [];
+  }
+  const naturals: number[] = [];
+  for (let i = 0; i < num; i += 1) {
+    if (itemSize(i) === 'natural') {
+      naturals.push(i);
+    }
+  }
+  return naturals;
 };
 
 const sameCell = (c1?: Cell, c2?: Cell) => c1 && c2 && c1.col === c2.col && c1.row === c2.row;

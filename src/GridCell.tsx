@@ -15,45 +15,26 @@ const GridCell: FC<{
   width: number;
   height: number;
   zIndex?: number;
-  naturalHeightRow?: number;
-  naturalWidthCol?: number;
   draggable: boolean;
-}> = memo(
-  ({
-    className,
-    row,
-    col,
-    top,
-    left,
-    width,
-    height,
-    zIndex,
-    naturalHeightRow,
-    naturalWidthCol,
-    draggable,
-    children,
-  }) => {
-    const renderedCell = (
-      <CellRoot
-        className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
-        draggable={draggable || undefined}
-        data-natural-height-row={naturalHeightRow}
-        data-natural-width-col={naturalWidthCol}
-        style={{
-          left: px(left),
-          top: px(top),
-          width: px(width),
-          height: px(height),
-          zIndex,
-        }}
-      >
-        {children}
-      </CellRoot>
-    );
+}> = memo(({ className, row, col, top, left, width, height, zIndex, draggable, children }) => {
+  const renderedCell = (
+    <CellRoot
+      className={[className, `r${row}`, `c${col}`].filter(Boolean).join(' ')}
+      draggable={draggable || undefined}
+      style={{
+        left: px(left),
+        top: px(top),
+        width: px(width),
+        height: px(height),
+        zIndex,
+      }}
+    >
+      {children}
+    </CellRoot>
+  );
 
-    return renderedCell;
-  },
-);
+  return renderedCell;
+});
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
