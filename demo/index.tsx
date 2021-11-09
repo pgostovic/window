@@ -5,6 +5,7 @@ import styled, { createGlobalStyle } from 'styled-components';
 
 import * as basic from './examples/basic';
 import * as basicgrid from './examples/basicgrid';
+import * as editableCells from './examples/editableCells';
 import * as eventSource from './examples/eventSource';
 import * as flexWidth from './examples/flexWidth';
 import * as itemSizes from './examples/itemSizes';
@@ -27,6 +28,7 @@ const examples = {
   richgrid,
   overlay,
   sticky,
+  editableCells,
 };
 
 const flatExamples = Object.values(examples).reduce((rendered, comps) => ({ ...rendered, ...comps }), {});

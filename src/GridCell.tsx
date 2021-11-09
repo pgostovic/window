@@ -38,4 +38,6 @@ const GridCell: FC<{
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
+export const gridCellClassName = CellRoot.toString();
+
 export default GridCell;

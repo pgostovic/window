@@ -18,7 +18,7 @@ import ResizeObserver from 'resize-observer-polyfill';
 import styled from 'styled-components';
 
 import FixedMargin, { FixedMarginProps } from './FixedMargin';
-import GridCell from './GridCell';
+import GridCell, { gridCellClassName } from './GridCell';
 import GridLayout, { WindowCellsRect, WindowPxRect } from './GridLayout';
 import Scheduler from './Scheduler';
 import ScrollBar, { ScrollBarRef } from './ScrollBar';
@@ -129,6 +129,7 @@ interface Props {
   onScroll?(position: { left: number; top: number; maxLeft: number; maxTop: number }): void;
   mayScroll?: boolean | ((props: MayScrollProps) => boolean);
   cellClassName?(cell: Cell): string;
+  mayTabToCell?(cell: Pick<Cell, 'row' | 'col'>): boolean;
   logPerfStats?: boolean;
   children?(data: unknown, cell: Cell): ReactNode;
   style?: CSSProperties;
@@ -160,6 +161,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       onScroll,
       mayScroll = true,
       cellClassName,
+      mayTabToCell,
       logPerfStats = false,
       children: renderCell = data => data as ReactNode,
       style,
@@ -183,6 +185,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     const touchInfoRef = useRef<TouchInfo>({ t: 0, x: 0, dx: 0, y: 0, dy: 0 });
     const vScrollBarRef = useRef<ScrollBarRef>(null);
     const hScrollBarRef = useRef<ScrollBarRef>(null);
+    const cellToFocusRef = useRef<Cell>();
     const isMounted = useRef(false);
     const rowsRef = useRef<unknown[][]>();
 
@@ -633,6 +636,16 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       }
     }, [scrollEventSource, isVerticallyScrollable, isHorizontallyScrollable, scrollSpeed, logPerfStats, mayScroll]);
 
+    useEffect(() => {
+      if (cellToFocusRef.current) {
+        const cell = cellToFocusRef.current;
+        const cellElmnt = document.querySelector(`.r${cell.row}.c${cell.col} [tabIndex]`);
+        if (cellElmnt && (cellElmnt as HTMLElement).focus) {
+          (cellElmnt as HTMLElement).focus();
+        }
+      }
+    });
+
     /**
      * Handle cell events
      * ==================
@@ -708,13 +721,41 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
       {} as { [key: string]: (event: Event) => void },
     );
 
+    const findNextTabCell = (): Cell | undefined => {
+      if (mayTabToCell) {
+        const activeCell = getCellFromElement(document.activeElement, rows) || { row: 0, col: 0, data: rows[0][0] };
+        let { row, col } = activeCell;
+        do {
+          col += 1;
+          if (col >= numCols) {
+            col = 0;
+            row += 1;
+          }
+        } while (!mayTabToCell({ row, col }) && row <= numRows);
+
+        if (row < numRows && col < numCols) {
+          return { row, col, data: rows[row][col] };
+        }
+      }
+      return undefined;
+    };
+
     /**
      * Handle keyboard navigation with arrow keys, etc.
      */
     const yScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount?.y || 0;
     const xScrollAmount = typeof arrowScrollAmount === 'number' ? arrowScrollAmount : arrowScrollAmount?.x || 0;
-    const arrowKeyHandler = useCallback(
+    const keydownHandler = useCallback(
       (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Tab') {
+          event.preventDefault();
+          const nextCell = findNextTabCell();
+          if (nextCell) {
+            scrollerApi.scrollTo(nextCell.row, nextCell.col);
+            cellToFocusRef.current = nextCell;
+          }
+        }
+
         if (event.target === rootElmntRef.current) {
           const gridLayout = gridLayoutRef.current;
           let handled = true;
@@ -760,7 +801,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           }
         }
       },
-      [arrowScrollAmount],
+      [arrowScrollAmount, mayTabToCell],
     );
 
     const getAltCellSize = (cell: Cell) => {
@@ -1092,7 +1133,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
             ref={rootElmntRef}
             id={scrollerId}
             tabIndex={arrowScrollAmount ? 0 : undefined}
-            onKeyDown={arrowKeyHandler}
+            onKeyDown={keydownHandler}
             {...handlerProps}
           >
             <Cells
@@ -1379,4 +1420,23 @@ const getRenderRange = (cellsRect: WindowCellsRect, totalRows: number, totalCols
     fromCol = Math.max(fromCol, toCol - numCols);
   }
   return { fromRow, toRow, fromCol, toCol };
+};
+
+const getCellFromElement = (elmnt: Element | null, rows: unknown[][]): Cell | undefined => {
+  const cellCoords = elmnt
+    ?.closest(gridCellClassName)
+    ?.className.split(/\s+/)
+    .reduce(
+      (rc, cn) => {
+        const m = cn.match(/([rc])(\d+)/);
+        if (m && m[1] === 'r') {
+          return { ...rc, row: Number(m[2]) };
+        } else if (m && m[1] === 'c') {
+          return { ...rc, col: Number(m[2]) };
+        }
+        return rc;
+      },
+      { row: -1, col: -1 },
+    );
+  return cellCoords ? { ...cellCoords, data: rows[cellCoords.row][cellCoords.col] } : undefined;
 };
