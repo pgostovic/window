@@ -11,7 +11,7 @@ for (let i = 0; i < NUM; i++) {
 
 const sizes: (number | 'natural')[] = [];
 for (let i = 0; i < NUM; i++) {
-  if (i === 0 || i === 50) {
+  if (i === 0 || i === 50 || i === 55) {
     sizes.push('natural');
   } else {
     sizes.push(20 + Math.round(Math.random() * 50));
@@ -23,6 +23,7 @@ let offset = { left: 0, top: 0 };
 export const ItemSizes: FC = () => {
   const windowRef = useRef<ScrollerRef>();
   const [slice, setSlice] = useState(NUM);
+  const [showMores, setShowMores] = useState<number[]>([]);
 
   const slicedNums = numbers.slice(0, slice);
   const slicedSizes = sizes.slice(0, slice);
@@ -52,8 +53,13 @@ export const ItemSizes: FC = () => {
         initScrollPosition={offset}
       >
         {(num: number, { row }) =>
-          row === 50 ? (
-            <Fifty />
+          row === 50 || row == 55 ? (
+            <Resizeable
+              showMore={showMores.includes(row)}
+              onChange={showMore => {
+                setShowMores(showMore ? showMores.concat([row]) : showMores.filter(r => r !== row));
+              }}
+            />
           ) : (
             <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center', height: '100%' }}>
               <span style={{ flex: 1 }}>{num}</span>
@@ -66,13 +72,12 @@ export const ItemSizes: FC = () => {
   );
 };
 
-const Fifty: FC = () => {
-  const [showMore, setShowMore] = useState(false);
+const Resizeable: FC<{ showMore: boolean; onChange(showMore: boolean): void }> = ({ showMore, onChange }) => {
   return (
-    <div style={{ borderBottom: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+    <div style={{ borderBottom: '1px solid #ccc' }}>
       <div>
-        FIFTY
-        <button type="button" onClick={() => setShowMore(!showMore)}>
+        RESIZEABLE
+        <button type="button" onClick={() => onChange(!showMore)}>
           show/hide more
         </button>
       </div>

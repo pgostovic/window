@@ -19,7 +19,7 @@ import styled from 'styled-components';
 
 import FixedMargin, { FixedMarginProps } from './FixedMargin';
 import GridCell, { gridCellClassName } from './GridCell';
-import GridLayout, { WindowCellsRect, WindowPxRect } from './GridLayout';
+import GridLayout, { ItemSize, SizeOverrides, WindowCellsRect, WindowPxRect } from './GridLayout';
 import Scheduler from './Scheduler';
 import ScrollBar, { ScrollBarRef } from './ScrollBar';
 
@@ -67,12 +67,6 @@ const EventPropsByType = {
 
 export type EventType = keyof typeof EventPropsByType;
 
-interface FlexSize {
-  flex: number;
-  min: number;
-}
-type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
-
 export interface CellSpan {
   row: number;
   col: number;
@@ -84,10 +78,6 @@ export interface Cell {
   row: number;
   col: number;
   data: unknown;
-}
-
-interface SizeOverrides {
-  [key: number]: number;
 }
 
 interface TouchInfo {
@@ -190,8 +180,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     const rowsRef = useRef<unknown[][]>();
 
     // State
-    const [rowHeightOverrides, setRowHeightOverrides] = useState<SizeOverrides>({});
-    const [colWidthOverrides, setColWidthOverrides] = useState<SizeOverrides>({});
     const [, render] = useState(false);
 
     useEffect(() => {
@@ -218,21 +206,16 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     /** Number of columns of data. */
     const numCols = useMemo(() => rows.reduce((max, row) => Math.max(max, row.length), 0), [rows]);
 
+    /**
+     * TODO: maybe memoize position calcs. Seems pretty fast, like <0.5ms for both calcs
+     * on 1000x1000 grid.
+     */
+
     /** Row positions -- height and y location of each row. */
-    const rowPositions = useMemo(() => {
-      const gridLayout = gridLayoutRef.current;
-      const heights = calculateSizes(rowHeight, numRows, gridLayout.getWindowRect().height, rowHeightOverrides);
-      gridLayout.setRowHeights(heights);
-      return gridLayout.getRowPositions();
-    }, [rows, rowHeight, rowHeightOverrides, gridLayoutRef.current.getWindowRect().height]);
+    const rowPositions = gridLayoutRef.current.calculateRowPositions(rowHeight, numRows);
 
     /** Col positions -- width and x location of each column. */
-    const colPositions = useMemo(() => {
-      const gridLayout = gridLayoutRef.current;
-      const widths = calculateSizes(colWidth, numCols, gridLayout.getWindowRect().width, colWidthOverrides);
-      gridLayout.setColWidths(widths);
-      return gridLayout.getColPositions();
-    }, [rows, colWidth, colWidthOverrides, gridLayoutRef.current.getWindowRect().width]);
+    const colPositions = gridLayoutRef.current.calculateColPositions(colWidth, numCols);
 
     /**
      * Row/column heights/widths can be specified as "natural". A row with a natural height
@@ -242,85 +225,43 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     const naturalHeightRows = useMemo(() => getNaturals(rowHeight, numRows), [rowHeight, numRows]);
     const naturalWidthCols = useMemo(() => getNaturals(colWidth, numCols), [colWidth, numCols]);
 
-    const naturalsResizeObserver = useMemo(
-      () =>
-        new ResizeObserver(entries => {
-          const rowHeightUpdates: SizeOverrides = {};
-          const colWidthUpdates: SizeOverrides = {};
-          let hasRowHeightUpdate = false;
-          let hasColWidthUpdates = false;
-          entries.forEach(entry => {
-            const cellElmnt = entry.target.parentElement;
-            let row: number | undefined;
-            let col: number | undefined;
-            cellElmnt?.className.split(/\s+/).forEach(cn => {
-              const m = cn.match(/([rc])(\d+)/);
-              if (m && m[1] === 'r') {
-                row = Number(m[2]);
-              } else if (m && m[1] === 'c') {
-                col = Number(m[2]);
+    /**
+     * After each render, observe the cell elements with 'natural' size with a ResizeObserver.
+     */
+    useEffect(() => {
+      const resizeObserver = new ResizeObserver(entries => {
+        const rowHeightOverrides: SizeOverrides = {};
+        const colWidthOverrides: SizeOverrides = {};
+        entries.forEach(entry => {
+          if (entry.target.isConnected) {
+            const cell = getCellFromElement(entry.target.parentElement);
+            if (cell) {
+              if (naturalHeightRows.includes(cell.row)) {
+                rowHeightOverrides[cell.row] = Math.max(rowHeightOverrides[cell.row] || 0, entry.contentRect.height);
               }
-            });
-
-            if (
-              typeof row === 'number' &&
-              naturalHeightRows.includes(row) &&
-              entry.contentRect.height !== rowHeightOverrides[row]
-            ) {
-              rowHeightUpdates[row] = entry.contentRect.height;
-              hasRowHeightUpdate = true;
+              if (naturalWidthCols.includes(cell.col)) {
+                colWidthOverrides[cell.col] = Math.max(colWidthOverrides[cell.col] || 0, entry.contentRect.width);
+              }
             }
-
-            if (
-              typeof col === 'number' &&
-              naturalWidthCols.includes(col) &&
-              entry.contentRect.width !== colWidthOverrides[col]
-            ) {
-              colWidthUpdates[col] = entry.contentRect.width;
-              hasColWidthUpdates = true;
-            }
-          });
-
-          if (hasRowHeightUpdate) {
-            setRowHeightOverrides({ ...rowHeightOverrides, ...rowHeightUpdates });
           }
-          if (hasColWidthUpdates) {
-            setRowHeightOverrides({ ...colWidthOverrides, ...colWidthUpdates });
-          }
-
-          if (hasRowHeightUpdate || hasColWidthUpdates) {
-            gridLayoutRef.current.refresh();
-          }
-        }),
-      [naturalHeightRows, rowHeightOverrides, naturalWidthCols, colWidthOverrides],
-    );
-
-    useEffect(() => {
-      return () => naturalsResizeObserver.disconnect();
-    }, [rowHeightOverrides, colWidthOverrides]);
-
-    useEffect(() => {
-      naturalsResizeObserver.disconnect();
+        });
+        gridLayoutRef.current.applyRowHeightOverrides(rowHeightOverrides);
+        gridLayoutRef.current.applyColWidthOverrides(colWidthOverrides);
+      });
 
       naturalHeightRows.forEach(naturalHeightRow => {
-        document
-          .querySelectorAll(
-            `.${scrollerId}-cells > div.r${naturalHeightRow} > *, #${scrollerId} > div.loose.r${naturalHeightRow} > *`,
-          )
-          .forEach(cellElmnt => {
-            naturalsResizeObserver.observe(cellElmnt);
-          });
+        rootElmntRef.current?.querySelectorAll(`div.r${naturalHeightRow} > *`).forEach(cellElmnt => {
+          resizeObserver.observe(cellElmnt);
+        });
       });
 
       naturalWidthCols.forEach(naturalWidthCol => {
-        document
-          .querySelectorAll(
-            `.${scrollerId}-cells > div.c${naturalWidthCol} > *, #${scrollerId} > div.loose.c${naturalWidthCol} > *`,
-          )
-          .forEach(cellElmnt => {
-            naturalsResizeObserver.observe(cellElmnt);
-          });
+        rootElmntRef.current?.querySelectorAll(`div.c${naturalWidthCol} > *`).forEach(cellElmnt => {
+          resizeObserver.observe(cellElmnt);
+        });
       });
+
+      return () => resizeObserver.disconnect();
     });
 
     const isVerticallyScrollable = gridLayoutRef.current.getScrollability().vertical;
@@ -479,27 +420,6 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
     );
 
     useImperativeHandle(ref, () => scrollerApi, []);
-
-    /**
-     * Force a layout refresh when rows change.
-     */
-    useEffect(() => {
-      // Reset overrides, but leave ones above the fold.
-      setRowHeightOverrides(rho =>
-        Object.keys(rho).reduce(
-          (so, k) => (Number(k) <= fromRow ? { ...so, [k]: rho[Number(k)] } : so),
-          {} as SizeOverrides,
-        ),
-      );
-      setColWidthOverrides(cwo =>
-        Object.keys(cwo).reduce(
-          (so, k) => (Number(k) <= fromCol ? { ...so, [k]: cwo[Number(k)] } : so),
-          {} as SizeOverrides,
-        ),
-      );
-
-      gridLayoutRef.current.refresh();
-    }, [rows]);
 
     // Detect initial and changes in root element size.
     useEffect(() => {
@@ -1269,35 +1189,10 @@ const to2d = (rows: Array<unknown | unknown[]>): unknown[][] => {
 
 const px = (size: number) => (size === 0 ? 0 : `${size}px`);
 
-const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number, sizeOverrides: SizeOverrides): number[] => {
-  if (typeof itemSize === 'number') {
-    return Array(count).fill(itemSize);
-  } else {
-    const sizes = Array(count)
-      .fill(0)
-      .map((_, i) => itemSize(i));
-
-    const staticSizes = sizes.filter(s => typeof s === 'number') as number[];
-    if (staticSizes.length === sizes.length) {
-      return staticSizes;
-    }
-
-    const staticSize = staticSizes.reduce((t, s) => t + s, 0);
-    const flexSizes = sizes.filter(s => typeof s === 'object') as FlexSize[];
-    const minSize = staticSize + flexSizes.reduce((t, s) => t + s.min, 0);
-    if (minSize < maxSize) {
-      const remainder = maxSize - staticSize;
-      const remainderPerFlex = remainder / flexSizes.reduce((t, s) => t + s.flex, 0);
-      return sizes.map(
-        (s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.flex * remainderPerFlex),
-      );
-    } else {
-      return sizes.map((s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.min));
-    }
-  }
-};
-
-const getNaturals = (itemSize: ItemSize, num: number) => {
+/**
+ * Returns a list of rows/columns that have 'natural' size.
+ */
+const getNaturals = (itemSize: ItemSize, num: number): number[] => {
   if (typeof itemSize === 'number') {
     return [];
   }
@@ -1422,7 +1317,7 @@ const getRenderRange = (cellsRect: WindowCellsRect, totalRows: number, totalCols
   return { fromRow, toRow, fromCol, toCol };
 };
 
-const getCellFromElement = (elmnt: Element | null, rows: unknown[][]): Cell | undefined => {
+const getCellFromElement = (elmnt: Element | null, rows?: unknown[][]): Cell | undefined => {
   const cellCoords = elmnt
     ?.closest(gridCellClassName)
     ?.className.split(/\s+/)
@@ -1438,5 +1333,5 @@ const getCellFromElement = (elmnt: Element | null, rows: unknown[][]): Cell | un
       },
       { row: -1, col: -1 },
     );
-  return cellCoords ? { ...cellCoords, data: rows[cellCoords.row][cellCoords.col] } : undefined;
+  return cellCoords ? { ...cellCoords, data: rows ? rows[cellCoords.row][cellCoords.col] : undefined } : undefined;
 };

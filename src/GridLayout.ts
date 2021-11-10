@@ -11,6 +11,17 @@ type StuckRows = { [row: number]: { y: number; height: number } };
 export type WindowCellsRect = { row: number; col: number; numRows: number; numCols: number };
 export type WindowPxRect = { x: number; y: number; width: number; height: number };
 
+export interface FlexSize {
+  flex: number;
+  min: number;
+}
+
+export type ItemSize = number | ((index: number) => number | FlexSize | 'natural');
+
+export interface SizeOverrides {
+  [key: number]: number;
+}
+
 export default class GridLayout {
   private rowPositions: { y: number; height: number }[];
   private colPositions: { x: number; width: number }[];
@@ -23,6 +34,8 @@ export default class GridLayout {
   private stuckCols: StuckCols;
   private excessRenderX = DEFAULT_EXCESS_RENDER_X;
   private excessRenderY = DEFAULT_EXCESS_RENDER_Y;
+  private rowHeightOverrides: SizeOverrides = {};
+  private colWidthOverrides: SizeOverrides = {};
   public allowDiagnonal = false;
   public updateHandler: UpdateHandler = () => undefined;
 
@@ -49,30 +62,6 @@ export default class GridLayout {
     };
   }
 
-  setRowHeights(rowHeights: number[]): void {
-    const rowPositions: { y: number; height: number }[] = [];
-    let prev = { y: 0, height: 0 };
-    for (let i = 0; i < rowHeights.length; i += 1) {
-      const pos = { height: rowHeights[i], y: prev.y + prev.height };
-      rowPositions.push(pos);
-      prev = pos;
-    }
-    this.rowPositions = rowPositions;
-    this.gridPxSize.height = prev.y + prev.height;
-  }
-
-  setColWidths(colWidths: number[]): void {
-    const colPositions: { x: number; width: number }[] = [];
-    let prev = { x: 0, width: 0 };
-    for (let i = 0; i < colWidths.length; i += 1) {
-      const pos = { width: colWidths[i], x: prev.x + prev.width };
-      colPositions.push(pos);
-      prev = pos;
-    }
-    this.colPositions = colPositions;
-    this.gridPxSize.width = prev.x + prev.width;
-  }
-
   setStickyRows(stickyRows: number[]): void {
     this.stickyRows = [...stickyRows].sort((a, b) => a - b);
   }
@@ -93,12 +82,72 @@ export default class GridLayout {
     return this.stuckCols;
   }
 
-  getRowPositions(): { y: number; height: number }[] {
+  calculateRowPositions(rowHeight?: ItemSize, numRows?: number): { y: number; height: number }[] {
+    this.pruneRowHeightOverrides(rowHeight, numRows);
+    const heights =
+      rowHeight && typeof numRows === 'number'
+        ? calculateSizes(rowHeight, numRows, this.windowPxRect.height, this.rowHeightOverrides)
+        : this.rowPositions.map(({ height }, i) => this.rowHeightOverrides[i] || height);
+
+    const rowPositions: { y: number; height: number }[] = [];
+    let prev = { y: 0, height: 0 };
+    for (let i = 0; i < heights.length; i += 1) {
+      const pos = { height: heights[i], y: prev.y + prev.height };
+      rowPositions.push(pos);
+      prev = pos;
+    }
+    this.rowPositions = rowPositions;
+    this.gridPxSize.height = prev.y + prev.height;
+
     return this.rowPositions;
   }
 
-  getColPositions(): { x: number; width: number }[] {
+  applyRowHeightOverrides(overrides: SizeOverrides): void {
+    const hasChanges = Object.entries(overrides).some(([k, v]) => this.rowHeightOverrides[Number(k)] !== v);
+    if (hasChanges) {
+      this.rowHeightOverrides = { ...this.rowHeightOverrides, ...overrides };
+      this.calculateRowPositions();
+      this.refresh();
+    }
+  }
+
+  calculateColPositions(colWidth?: ItemSize, numCols?: number): { x: number; width: number }[] {
+    this.pruneColWidthOverrides(colWidth, numCols);
+    const widths =
+      colWidth && typeof numCols === 'number'
+        ? calculateSizes(colWidth, numCols, this.windowPxRect.width, this.colWidthOverrides)
+        : this.colPositions.map(({ width }, i) => this.colWidthOverrides[i] || width);
+
+    const colPositions: { x: number; width: number }[] = [];
+    let prev = { x: 0, width: 0 };
+    for (let i = 0; i < widths.length; i += 1) {
+      const pos = { width: widths[i], x: prev.x + prev.width };
+      colPositions.push(pos);
+      prev = pos;
+    }
+    this.colPositions = colPositions;
+    this.gridPxSize.width = prev.x + prev.width;
+
     return this.colPositions;
+  }
+
+  applyColWidthOverrides(overrides: SizeOverrides): void {
+    const hasChanges = Object.entries(overrides).some(([k, v]) => this.colWidthOverrides[Number(k)] !== v);
+    if (hasChanges) {
+      this.colWidthOverrides = { ...this.colWidthOverrides, ...overrides };
+      this.calculateColPositions();
+      this.refresh();
+    }
+  }
+
+  clearSizeOverrides(): void {
+    if (Object.keys(this.rowHeightOverrides).length > 0 || Object.keys(this.colWidthOverrides).length > 0) {
+      this.rowHeightOverrides = {};
+      this.colWidthOverrides = {};
+      this.calculateRowPositions();
+      this.calculateColPositions();
+      this.refresh();
+    }
   }
 
   setWindowSize(width: number, height: number): void {
@@ -350,4 +399,67 @@ export default class GridLayout {
     }
     return stuckCols;
   }
+
+  private pruneRowHeightOverrides(rowHeight?: ItemSize, numRows?: number): void {
+    if (typeof rowHeight === 'function' && typeof numRows === 'number') {
+      const overriddenRows = Object.keys(this.rowHeightOverrides).map(k => Number(k));
+      overriddenRows.forEach(row => {
+        if (rowHeight(row) !== 'natural') {
+          delete this.rowHeightOverrides[row];
+        }
+      });
+    }
+  }
+
+  private pruneColWidthOverrides(colWidth?: ItemSize, numCols?: number): void {
+    if (typeof colWidth === 'function' && typeof numCols === 'number') {
+      const overriddenCols = Object.keys(this.colWidthOverrides).map(k => Number(k));
+      overriddenCols.forEach(col => {
+        if (colWidth(col) !== 'natural') {
+          delete this.colWidthOverrides[col];
+        }
+      });
+    }
+  }
 }
+
+/**
+ * Returns the actual sizes for the rows/columns, accounting for flex and natural sizes.
+ *
+ * Flex:
+ * -----
+ * If the sum of the minimum sizes is less than the total maximum size, then the remainder is distributed
+ * among the flex items according to their `flex` value.
+ *
+ * Natural:
+ * --------
+ * Items with 'natural' size are replaced by values in the supplied `sizeOverrides`, or 0 if no override
+ * exists. Items with 'natural' size will be measured and then added to `sizeOverrides`.
+ */
+const calculateSizes = (itemSize: ItemSize, count: number, maxSize: number, sizeOverrides: SizeOverrides): number[] => {
+  if (typeof itemSize === 'number') {
+    return Array(count).fill(itemSize);
+  } else {
+    const sizes = Array(count)
+      .fill(0)
+      .map((_, i) => itemSize(i));
+
+    const staticSizes = sizes.filter(s => typeof s === 'number') as number[];
+    if (staticSizes.length === sizes.length) {
+      return staticSizes;
+    }
+
+    const staticSize = staticSizes.reduce((t, s) => t + s, 0);
+    const flexSizes = sizes.filter(s => typeof s === 'object') as FlexSize[];
+    const minSize = staticSize + flexSizes.reduce((t, s) => t + s.min, 0);
+    if (minSize < maxSize) {
+      const remainder = maxSize - staticSize;
+      const remainderPerFlex = remainder / flexSizes.reduce((t, s) => t + s.flex, 0);
+      return sizes.map(
+        (s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.flex * remainderPerFlex),
+      );
+    } else {
+      return sizes.map((s, i) => sizeOverrides[i] || (s === 'natural' ? -1 : typeof s === 'number' ? s : s.min));
+    }
+  }
+};
