@@ -421,6 +421,13 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
 
     useImperativeHandle(ref, () => scrollerApi, []);
 
+    /**
+     * Force a layout refresh when rows change.
+     */
+    useEffect(() => {
+      gridLayoutRef.current.refresh();
+    }, [rows]);
+
     // Detect initial and changes in root element size.
     useEffect(() => {
       const rootElmnt = rootElmntRef.current;
