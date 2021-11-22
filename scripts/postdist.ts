@@ -7,6 +7,7 @@ const buildDeps = [
   '@rollup/plugin-commonjs',
   '@rollup/plugin-node-resolve',
   '@rollup/plugin-replace',
+  '@types/node',
   '@types/react',
   '@types/react-dom',
   '@types/styled-components',
