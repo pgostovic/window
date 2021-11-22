@@ -3,9 +3,25 @@ import path from 'path';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json')).toString());
 
+const buildDeps = [
+  '@rollup/plugin-commonjs',
+  '@rollup/plugin-node-resolve',
+  '@rollup/plugin-replace',
+  '@types/react',
+  '@types/react-dom',
+  '@types/styled-components',
+  'react',
+  'react-dom',
+  'rollup',
+  'rollup-plugin-peer-deps-external',
+  'rollup-plugin-terser',
+  'rollup-plugin-typescript2',
+  'typescript',
+];
+
 const pruneDeps = (deps: { [key: string]: string }) =>
   Object.keys(deps).reduce(
-    (depsPruned, key) => (key.match(/@?rollup/) ? depsPruned : { ...depsPruned, [key]: deps[key] }),
+    (depsPruned, key) => (buildDeps.includes(key) ? depsPruned : { ...depsPruned, [key]: deps[key] }),
     {},
   );
 
