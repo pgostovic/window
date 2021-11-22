@@ -6,8 +6,8 @@
 class Scheduler {
   private rafPids: { [key: string]: number } = {};
   private throttleTimes: { [key: string]: number } = {};
-  private throttlePids: { [key: string]: NodeJS.Timeout } = {};
-  private debouncePids: { [key: string]: NodeJS.Timeout } = {};
+  private throttlePids: { [key: string]: number } = {};
+  private debouncePids: { [key: string]: number } = {};
 
   /**
    * Run the callback function in the next animation frame. Only the most recent invocation's
@@ -43,7 +43,7 @@ class Scheduler {
       fn();
       this.throttleTimes[key] = now;
     } else {
-      this.throttlePids[key] = setTimeout(fn, interval);
+      this.throttlePids[key] = window.setTimeout(fn, interval);
     }
   }
 
@@ -59,7 +59,7 @@ class Scheduler {
       clearTimeout(pid);
       delete this.debouncePids[key];
     }
-    this.debouncePids[key] = setTimeout(fn, interval);
+    this.debouncePids[key] = window.setTimeout(fn, interval);
   }
 }
 
