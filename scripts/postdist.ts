@@ -17,6 +17,7 @@ const buildDeps = [
   'rollup-plugin-peer-deps-external',
   'rollup-plugin-terser',
   'rollup-plugin-typescript2',
+  'ts-node',
   'typescript',
 ];
 
