@@ -5,7 +5,7 @@ const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'
 
 const pruneDeps = (deps: { [key: string]: string }) =>
   Object.keys(deps).reduce(
-    (depsPruned, key) => (key.startsWith('rollup') ? depsPruned : { ...depsPruned, [key]: deps[key] }),
+    (depsPruned, key) => (key.match(/@?rollup/) ? depsPruned : { ...depsPruned, [key]: deps[key] }),
     {},
   );
 
