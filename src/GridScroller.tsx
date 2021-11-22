@@ -86,7 +86,7 @@ interface TouchInfo {
   dx: number;
   y: number;
   dy: number;
-  pid?: NodeJS.Timeout;
+  pid?: number;
 }
 
 interface MayScrollProps extends WindowPxRect {
@@ -514,7 +514,7 @@ export const GridScroller = forwardRef<ScrollerRef, Props>(
           let speedX = touchInfo.dx / (t - touchInfo.t);
           let speedY = touchInfo.dy / (t - touchInfo.t);
 
-          const pid = setInterval(() => {
+          const pid = window.setInterval(() => {
             const dx = speedX * 16;
             const dy = speedY * 16;
             if (logPerfStats) {
