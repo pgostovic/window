@@ -2,9 +2,9 @@
   "name": "@phnq/window",
   "version": "1.5.19",
   "description": "Virtual scrolling",
-  "main": "index.js",
-  "module": "index.es.js",
-  "jsnext:main": "index.es.js",
+  "main": "dist/index.js",
+  "module": "dist/index.es.js",
+  "jsnext:main": "dist/index.es.js",
   "scripts": {
     "postdist": "rimraf dist/__tests__; ts-node --project scripts/tsconfig.json scripts/postdist",
     "dist": "rollup -c rollup.ts",
@@ -13,7 +13,8 @@
     "prelint": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --ext .ts,.tsx src demo",
     "release:patch": "npm run clean; npm version patch; npm run dist; cd dist; npm publish",
-    "release:minor": "npm run clean; npm version minor; npm run dist; cd dist; npm publish"
+    "release:minor": "npm run clean; npm version minor; npm run dist; cd dist; npm publish",
+    "postinstall": "npm run dist"
   },
   "repository": {
     "type": "git",
