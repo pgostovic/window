@@ -3,6 +3,12 @@ import path from 'path';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json')).toString());
 
+const pruneDeps = (deps: { [key: string]: string }) =>
+  Object.keys(deps).reduce(
+    (depsPruned, key) => (key.startsWith('rollup') ? depsPruned : { ...depsPruned, [key]: deps[key] }),
+    {},
+  );
+
 const {
   author,
   browser,
@@ -22,7 +28,7 @@ const {
 const distPkgJSON = {
   author,
   browser,
-  dependencies,
+  dependencies: pruneDeps(dependencies),
   peerDependencies,
   description,
   engines,
